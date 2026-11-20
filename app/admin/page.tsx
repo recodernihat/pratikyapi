@@ -23,7 +23,7 @@ export default function AdminPage() {
 
   const girisKontrol = (e: React.FormEvent) => {
     e.preventDefault();
-    if (sifre === "pratikyapı123") {
+    if (sifre === "admin123") {
       setGirisYapildi(true);
       setHata("");
     } else {
