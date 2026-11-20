@@ -1,25 +1,38 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
+interface Talep {
+  id: number;
+  ad: string;
+  hizmet: string;
+  tel: string;
+}
+
+interface Proje {
+  id: number;
+  baslik: string;
+  kategori: string;
+  gorsel?: string;
+}
 
 export default function AdminPage() {
   const [girisYapildi, setGirisYapildi] = useState(false);
   const [sifre, setSifre] = useState("");
   const [hata, setHata] = useState("");
 
-  // Örnek Teklif Talepleri
-  const [talepler, setTalepler] = useState([
-    { id: 1, ad: "Ahmet Yılmaz", hizmet: "Çelik Konstrüksiyon", tel: "0532 000 00 01", durum: "Yeni" },
-    { id: 2, ad: "Mehmet Demir", hizmet: "Prefabrik Ev", tel: "0533 000 00 02", durum: "Arandı" },
-  ]);
-
-  // Örnek Projeler
-  const [projeler, setProjeler] = useState([
-    { id: 1, baslik: "Şile Villa Pergola Uygulaması", kategori: "Pergola" },
-    { id: 2, baslik: "Tuzla Depo Çelik Çatı", kategori: "Çelik Yapı" },
-  ]);
+  const [talepler, setTalepler] = useState<Talep[]>([]);
+  const [projeler, setProjeler] = useState<Proje[]>([]);
   const [yeniProje, setYeniProje] = useState("");
-  const [yeniKategori, setYeniKategori] = useState("Genel");
+  const [yeniGorsel, setYeniGorsel] = useState("");
+  const [yeniKategori, setYeniKategori] = useState("Pergola");
+
+  useEffect(() => {
+    const kayitliTalepler = localStorage.getItem("pratikyapi_talepler");
+    const kayitliProjeler = localStorage.getItem("pratikyapi_projeler");
+    if (kayitliTalepler) setTalepler(JSON.parse(kayitliTalepler));
+    if (kayitliProjeler) setProjeler(JSON.parse(kayitliProjeler));
+  }, []);
 
   const girisKontrol = (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,21 +47,34 @@ export default function AdminPage() {
   const projeEkle = (e: React.FormEvent) => {
     e.preventDefault();
     if (!yeniProje.trim()) return;
-    setProjeler([{ id: Date.now(), baslik: yeniProje, kategori: yeniKategori }, ...projeler]);
+    const guncel = [
+      { id: Date.now(), baslik: yeniProje, kategori: yeniKategori, gorsel: yeniGorsel.trim() },
+      ...projeler,
+    ];
+    setProjeler(guncel);
+    localStorage.setItem("pratikyapi_projeler", JSON.stringify(guncel));
     setYeniProje("");
+    setYeniGorsel("");
   };
 
   const projeSil = (id: number) => {
-    setProjeler(projeler.filter((p) => p.id !== id));
+    const guncel = projeler.filter((p) => p.id !== id);
+    setProjeler(guncel);
+    localStorage.setItem("pratikyapi_projeler", JSON.stringify(guncel));
   };
 
-  // ŞİFRE EKRANI
+  const talepSil = (id: number) => {
+    const guncel = talepler.filter((t) => t.id !== id);
+    setTalepler(guncel);
+    localStorage.setItem("pratikyapi_talepler", JSON.stringify(guncel));
+  };
+
   if (!girisYapildi) {
     return (
       <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-4">
         <form onSubmit={girisKontrol} className="w-full max-w-sm bg-neutral-900 border border-neutral-800 p-6 rounded-2xl shadow-xl">
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-orange-600 rounded-lg flex flex-col items-center justify-center leading-none font-bold text-[10px]">
+            <div className="w-10 h-10 bg-neutral-800 border border-neutral-700 rounded-lg flex flex-col items-center justify-center leading-none font-bold text-[10px]">
               <span>PRATİK</span>
               <span>YAPI</span>
             </div>
@@ -63,12 +89,12 @@ export default function AdminPage() {
             placeholder="Admin şifresi..."
             value={sifre}
             onChange={(e) => setSifre(e.target.value)}
-            className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-4 py-2.5 text-sm mb-3 focus:outline-none focus:border-orange-500"
+            className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-4 py-2.5 text-sm mb-3 focus:outline-none focus:border-white"
           />
           {hata && <p className="text-red-400 text-xs mb-3">{hata}</p>}
           <button
             type="submit"
-            className="w-full bg-orange-600 hover:bg-orange-500 transition font-semibold py-2.5 rounded-lg text-sm cursor-pointer"
+            className="w-full bg-white text-black hover:bg-neutral-200 transition font-semibold py-2.5 rounded-lg text-sm cursor-pointer"
           >
             Giriş Yap
           </button>
@@ -77,15 +103,13 @@ export default function AdminPage() {
     );
   }
 
-  // ANA ADMIN PANELİ
   return (
     <div className="min-h-screen bg-neutral-950 text-white">
-      {/* Üst Bar */}
       <header className="border-b border-neutral-800 bg-neutral-900/60 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-neutral-900 border border-orange-500/50 rounded-lg flex flex-col items-center justify-center leading-tight">
+          <div className="w-10 h-10 bg-neutral-900 border border-neutral-700 rounded-lg flex flex-col items-center justify-center leading-tight">
             <span className="text-[9px] font-bold text-white uppercase">Pratik</span>
-            <span className="text-[9px] font-bold text-orange-500 uppercase">Yapı</span>
+            <span className="text-[9px] font-bold text-neutral-400 uppercase">Yapı</span>
           </div>
           <span className="font-bold text-lg">Admin Kontrol</span>
         </div>
@@ -98,11 +122,10 @@ export default function AdminPage() {
       </header>
 
       <main className="max-w-6xl mx-auto p-6 space-y-8">
-        {/* İstatistik Kartları */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="bg-neutral-900 border border-neutral-800 p-5 rounded-xl">
             <p className="text-xs text-neutral-400">Gelen Teklif Talepleri</p>
-            <p className="text-2xl font-bold mt-1 text-orange-500">{talepler.length}</p>
+            <p className="text-2xl font-bold mt-1">{talepler.length}</p>
           </div>
           <div className="bg-neutral-900 border border-neutral-800 p-5 rounded-xl">
             <p className="text-xs text-neutral-400">Yayındaki Projeler</p>
@@ -114,9 +137,7 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Alt Bölümler */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Gelen Talepler */}
           <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
             <h2 className="font-bold text-base mb-4">Müşteri Teklif Talepleri</h2>
             <div className="space-y-3">
@@ -127,51 +148,66 @@ export default function AdminPage() {
                     <p className="text-xs text-neutral-400">{t.hizmet} • {t.tel}</p>
                   </div>
                   <button
-                    onClick={() => setTalepler(talepler.filter((item) => item.id !== t.id))}
+                    onClick={() => talepSil(t.id)}
                     className="text-xs text-red-400 hover:text-red-300 cursor-pointer"
                   >
                     Sil
                   </button>
                 </div>
               ))}
-              {talepler.length === 0 && <p className="text-xs text-neutral-500">Bekleyen talep yok.</p>}
+              {talepler.length === 0 && <p className="text-xs text-neutral-500">Henüz teklif talebi yok.</p>}
             </div>
           </div>
 
-          {/* Proje Yönetimi */}
           <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
             <h2 className="font-bold text-base mb-4">Hızlı Proje Ekle / Yönet</h2>
-            <form onSubmit={projeEkle} className="flex gap-2 mb-4">
-              <input
-                type="text"
-                placeholder="Proje adı yaz..."
-                value={yeniProje}
-                onChange={(e) => setYeniProje(e.target.value)}
-                className="flex-1 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-orange-500"
-              />
-              <select
-                value={yeniKategori}
-                onChange={(e) => setYeniKategori(e.target.value)}
-                className="bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-2 text-xs"
-              >
-                <option value="Pergola">Pergola</option>
-                <option value="Çelik Yapı">Çelik Yapı</option>
-                <option value="Prefabrik">Prefabrik</option>
-              </select>
-              <button
-                type="submit"
-                className="bg-orange-600 hover:bg-orange-500 px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer"
-              >
-                Ekle
-              </button>
+            <form onSubmit={projeEkle} className="space-y-2.5 mb-4">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Proje adı yaz..."
+                  value={yeniProje}
+                  onChange={(e) => setYeniProje(e.target.value)}
+                  className="flex-1 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-white"
+                />
+                <select
+                  value={yeniKategori}
+                  onChange={(e) => setYeniKategori(e.target.value)}
+                  className="bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-2 text-xs"
+                >
+                  <option value="Pergola">Pergola</option>
+                  <option value="Çelik Yapı">Çelik Yapı</option>
+                  <option value="Prefabrik">Prefabrik</option>
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  placeholder="Görsel linki yapıştır (https://...)"
+                  value={yeniGorsel}
+                  onChange={(e) => setYeniGorsel(e.target.value)}
+                  className="flex-1 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-white"
+                />
+                <button
+                  type="submit"
+                  className="bg-white text-black hover:bg-neutral-200 px-5 py-2 rounded-lg text-xs font-semibold cursor-pointer"
+                >
+                  Ekle
+                </button>
+              </div>
             </form>
 
             <div className="space-y-2.5">
               {projeler.map((p) => (
                 <div key={p.id} className="flex items-center justify-between bg-neutral-950 p-3 rounded-lg border border-neutral-800/80">
-                  <div>
-                    <p className="text-sm font-medium">{p.baslik}</p>
-                    <span className="text-[11px] text-orange-400">{p.kategori}</span>
+                  <div className="flex items-center gap-3">
+                    {p.gorsel && (
+                      <img src={p.gorsel} alt={p.baslik} className="w-11 h-11 rounded object-cover border border-neutral-800" />
+                    )}
+                    <div>
+                      <p className="text-sm font-medium">{p.baslik}</p>
+                      <span className="text-[11px] text-neutral-400">{p.kategori}</span>
+                    </div>
                   </div>
                   <button
                     onClick={() => projeSil(p.id)}
@@ -181,6 +217,7 @@ export default function AdminPage() {
                   </button>
                 </div>
               ))}
+              {projeler.length === 0 && <p className="text-xs text-neutral-500">Henüz eklenmiş proje yok.</p>}
             </div>
           </div>
         </div>
