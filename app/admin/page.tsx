@@ -18,12 +18,36 @@ interface Proje {
   gorsel?: string;
 }
 
-const VARSAYILAN_BASLIKLAR: Record<string, string> = {
-  "Pergola": "Bioklimatik Pergola Uygulaması",
-  "Kış Bahçesi": "Modern Kış Bahçesi Uygulaması",
-  "Cam Cephe": "Sistem Cam Cephe Uygulaması",
-  "Çelik Yapı": "Çelik Konstrüksiyon Yapı Projesi",
-  "Prefabrik": "Prefabrik Yapı Uygulaması",
+const BASLIK_HAVUZU: Record<string, string[]> = {
+  "Pergola": [
+    "Bioklimatik Pergola Uygulaması",
+    "LED Işıklı Açılır Tavan Pergola",
+    "Motorlu Raylı Pergola Sistemi",
+    "Giyotin Camlı Pergola Projesi",
+    "Teras & Bahçe Pergola Uygulaması",
+  ],
+  "Kış Bahçesi": [
+    "Modern Villa Kış Bahçesi",
+    "Sürme Camlı Kış Bahçesi Uygulaması",
+    "Isı Yalıtımlı Kış Bahçesi Projesi",
+    "Bahçe Katı Cam Kış Bahçesi",
+  ],
+  "Cam Cephe": [
+    "Sistem Cam Cephe Uygulaması",
+    "Ticari Showroom Cam Cephe",
+    "Giyotin & Sürme Cam Sistemi",
+    "Alüminyum Doğrama Cam Cephe",
+  ],
+  "Çelik Yapı": [
+    "Çelik Konstrüksiyon Yapı Projesi",
+    "Modern Çelik Çatı & Sundurma",
+    "Endüstriyel Çelik Yapı Uygulaması",
+  ],
+  "Prefabrik": [
+    "Prefabrik Yapı Uygulaması",
+    "Modern Prefabrik Yaşam Alanı",
+    "Anahtar Teslim Prefabrik Proje",
+  ],
 };
 
 export default function AdminPage() {
@@ -55,7 +79,6 @@ export default function AdminPage() {
     if (girisYapildi) verileriGetir();
   }, [girisYapildi]);
 
-  // Fotoğrafı analiz edip kategoriyi otomatik tahmin eden fonksiyon
   const gorselAnalizEt = (file: File) => {
     const ad = file.name.toLowerCase();
     if (ad.includes("pergola")) return uygulaTahmin("Pergola");
@@ -91,19 +114,14 @@ export default function AdminPage() {
             const g = data[i + 1];
             const b = data[i + 2];
 
-            // Üst yarıda pergola lamelleri / ışıklı tavan kontrastı
             if (y < 45 && y > 0) {
               const ustI = ((y - 1) * w + x) * 4;
               const fark = Math.abs(r - data[ustI]) + Math.abs(g - data[ustI + 1]) + Math.abs(b - data[ustI + 2]);
               if (fark > 95) tavanCizgi++;
             }
-            // Alt kısımda çim / bahçe yeşili (Kış Bahçesi)
             if (y > 62 && g > r + 12 && g > b + 12) yesilAlt++;
-            // Cam yansıması (Cam Cephe)
             if (y >= 20 && y <= 75 && b > r + 15 && b > 90) maviCam++;
-            // Gri metalik tonlar (Çelik Yapı)
             if (Math.abs(r - g) < 12 && Math.abs(g - b) < 12 && r > 70 && r < 180) griMetal++;
-            // Açık beyaz/krem cephe duvarı (Prefabrik)
             if (y >= 30 && y <= 75 && r > 205 && g > 200 && b > 190) acikDuvar++;
           }
         }
@@ -131,7 +149,10 @@ export default function AdminPage() {
   const uygulaTahmin = (kategori: string) => {
     setYeniKategori(kategori);
     setOtoNot(`Otomatik seçildi: ${kategori}`);
-    setYeniProje((prev) => (prev.trim() === "" ? VARSAYILAN_BASLIKLAR[kategori] : prev));
+    const mevcutSayi = projeler.filter((p) => p.kategori === kategori).length;
+    const liste = BASLIK_HAVUZU[kategori] || ["Özel Yapı Uygulaması"];
+    const otoBaslik = liste[mevcutSayi % liste.length];
+    setYeniProje(otoBaslik);
   };
 
   const dosyaSecildi = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -331,54 +352,4 @@ export default function AdminPage() {
                   placeholder="Proje adı (fotoğraf seçince otomatik dolar)..."
                   value={yeniProje}
                   onChange={(e) => setYeniProje(e.target.value)}
-                  className="flex-1 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-white"
-                />
-                <select
-                  value={yeniKategori}
-                  onChange={(e) => setYeniKategori(e.target.value)}
-                  className="bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-2 text-xs"
-                >
-                  <option value="Pergola">Pergola</option>
-                  <option value="Kış Bahçesi">Kış Bahçesi</option>
-                  <option value="Cam Cephe">Cam Cephe</option>
-                  <option value="Çelik Yapı">Çelik Yapı</option>
-                  <option value="Prefabrik">Prefabrik</option>
-                </select>
-                <button
-                  type="submit"
-                  disabled={yukleniyor}
-                  className="bg-white text-black hover:bg-neutral-200 disabled:opacity-50 px-5 py-2 rounded-lg text-xs font-semibold cursor-pointer"
-                >
-                  {yukleniyor ? "Yükleniyor..." : "Ekle"}
-                </button>
-              </div>
-            </form>
-
-            <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
-              {projeler.map((p) => (
-                <div key={p.id} className="flex items-center justify-between bg-neutral-950 p-3 rounded-lg border border-neutral-800/80">
-                  <div className="flex items-center gap-3">
-                    {p.gorsel && (
-                      <img src={p.gorsel} alt={p.baslik} className="w-12 h-12 rounded object-cover border border-neutral-800" />
-                    )}
-                    <div>
-                      <p className="text-sm font-medium">{p.baslik}</p>
-                      <span className="text-[11px] text-neutral-400">{p.kategori}</span>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => projeSil(p.id)}
-                    className="text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 px-2.5 py-1 rounded cursor-pointer"
-                  >
-                    Kaldır
-                  </button>
-                </div>
-              ))}
-              {projeler.length === 0 && <p className="text-xs text-neutral-500">Henüz eklenmiş proje yok.</p>}
-            </div>
-          </div>
-        </div>
-      </main>
-    </div>
-  );
-}
+                  className="
