@@ -1,16 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { db } from "../firebase";
+import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy } from "firebase/firestore";
 
 interface Talep {
-  id: number;
+  id: string;
   ad: string;
   hizmet: string;
   tel: string;
 }
 
 interface Proje {
-  id: number;
+  id: string;
   baslik: string;
   kategori: string;
   gorsel?: string;
@@ -24,15 +26,48 @@ export default function AdminPage() {
   const [talepler, setTalepler] = useState<Talep[]>([]);
   const [projeler, setProjeler] = useState<Proje[]>([]);
   const [yeniProje, setYeniProje] = useState("");
-  const [yeniGorsel, setYeniGorsel] = useState("");
   const [yeniKategori, setYeniKategori] = useState("Pergola");
+  const [secilenDosya, setSecilenDosya] = useState<File | null>(null);
+  const [yukleniyor, setYukleniyor] = useState(false);
+
+  const verileriGetir = async () => {
+    try {
+      const pSnap = await getDocs(query(collection(db, "projeler"), orderBy("createdAt", "desc")));
+      setProjeler(pSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Proje, "id">) })));
+
+      const tSnap = await getDocs(query(collection(db, "talepler"), orderBy("createdAt", "desc")));
+      setTalepler(tSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Talep, "id">) })));
+    } catch (err) {
+      console.error("Veri çekme hatası:", err);
+    }
+  };
 
   useEffect(() => {
-    const kayitliTalepler = localStorage.getItem("pratikyapi_talepler");
-    const kayitliProjeler = localStorage.getItem("pratikyapi_projeler");
-    if (kayitliTalepler) setTalepler(JSON.parse(kayitliTalepler));
-    if (kayitliProjeler) setProjeler(JSON.parse(kayitliProjeler));
-  }, []);
+    if (girisYapildi) verileriGetir();
+  }, [girisYapildi]);
+
+  const gorselSikistir = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const maxGenislik = 900;
+          const oran = maxGenislik / img.width;
+          canvas.width = img.width > maxGenislik ? maxGenislik : img.width;
+          canvas.height = img.width > maxGenislik ? img.height * oran : img.height;
+          const ctx = canvas.getContext("2d");
+          ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", 0.75));
+        };
+        img.onerror = reject;
+      };
+      reader.onerror = reject;
+    });
+  };
 
   const girisKontrol = (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,29 +79,42 @@ export default function AdminPage() {
     }
   };
 
-  const projeEkle = (e: React.FormEvent) => {
+  const projeEkle = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!yeniProje.trim()) return;
-    const guncel = [
-      { id: Date.now(), baslik: yeniProje, kategori: yeniKategori, gorsel: yeniGorsel.trim() },
-      ...projeler,
-    ];
-    setProjeler(guncel);
-    localStorage.setItem("pratikyapi_projeler", JSON.stringify(guncel));
-    setYeniProje("");
-    setYeniGorsel("");
+    setYukleniyor(true);
+    try {
+      let gorselData = "";
+      if (secilenDosya) {
+        gorselData = await gorselSikistir(secilenDosya);
+      }
+      await addDoc(collection(db, "projeler"), {
+        baslik: yeniProje.trim(),
+        kategori: yeniKategori,
+        gorsel: gorselData,
+        createdAt: Date.now(),
+      });
+      setYeniProje("");
+      setSecilenDosya(null);
+      const fileInput = document.getElementById("dosya-input") as HTMLInputElement;
+      if (fileInput) fileInput.value = "";
+      await verileriGetir();
+    } catch (err) {
+      alert("Yükleme sırasında hata oldu, Firestore test modunun açık olduğundan emin ol.");
+      console.error(err);
+    } finally {
+      setYukleniyor(false);
+    }
   };
 
-  const projeSil = (id: number) => {
-    const guncel = projeler.filter((p) => p.id !== id);
-    setProjeler(guncel);
-    localStorage.setItem("pratikyapi_projeler", JSON.stringify(guncel));
+  const projeSil = async (id: string) => {
+    await deleteDoc(doc(db, "projeler", id));
+    setProjeler(projeler.filter((p) => p.id !== id));
   };
 
-  const talepSil = (id: number) => {
-    const guncel = talepler.filter((t) => t.id !== id);
-    setTalepler(guncel);
-    localStorage.setItem("pratikyapi_talepler", JSON.stringify(guncel));
+  const talepSil = async (id: string) => {
+    await deleteDoc(doc(db, "talepler", id));
+    setTalepler(talepler.filter((t) => t.id !== id));
   };
 
   if (!girisYapildi) {
@@ -161,11 +209,11 @@ export default function AdminPage() {
 
           <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
             <h2 className="font-bold text-base mb-4">Hızlı Proje Ekle / Yönet</h2>
-            <form onSubmit={projeEkle} className="space-y-2.5 mb-4">
+            <form onSubmit={projeEkle} className="space-y-3 mb-5">
               <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="Proje adı yaz..."
+                  placeholder="Proje adı yaz (Örn: Villa Kış Bahçesi)..."
                   value={yeniProje}
                   onChange={(e) => setYeniProje(e.target.value)}
                   className="flex-1 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-white"
@@ -176,33 +224,37 @@ export default function AdminPage() {
                   className="bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-2 text-xs"
                 >
                   <option value="Pergola">Pergola</option>
+                  <option value="Kış Bahçesi">Kış Bahçesi</option>
+                  <option value="Cam Cephe">Cam Cephe</option>
                   <option value="Çelik Yapı">Çelik Yapı</option>
                   <option value="Prefabrik">Prefabrik</option>
                 </select>
               </div>
-              <div className="flex gap-2">
+
+              <div className="flex items-center gap-2">
                 <input
-                  type="url"
-                  placeholder="Görsel linki yapıştır (https://...)"
-                  value={yeniGorsel}
-                  onChange={(e) => setYeniGorsel(e.target.value)}
-                  className="flex-1 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-white"
+                  id="dosya-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setSecilenDosya(e.target.files?.[0] || null)}
+                  className="flex-1 text-xs text-neutral-400 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-neutral-800 file:text-white hover:file:bg-neutral-700 cursor-pointer"
                 />
                 <button
                   type="submit"
-                  className="bg-white text-black hover:bg-neutral-200 px-5 py-2 rounded-lg text-xs font-semibold cursor-pointer"
+                  disabled={yukleniyor}
+                  className="bg-white text-black hover:bg-neutral-200 disabled:opacity-50 px-5 py-2 rounded-lg text-xs font-semibold cursor-pointer"
                 >
-                  Ekle
+                  {yukleniyor ? "Yükleniyor..." : "Ekle"}
                 </button>
               </div>
             </form>
 
-            <div className="space-y-2.5">
+            <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
               {projeler.map((p) => (
                 <div key={p.id} className="flex items-center justify-between bg-neutral-950 p-3 rounded-lg border border-neutral-800/80">
                   <div className="flex items-center gap-3">
                     {p.gorsel && (
-                      <img src={p.gorsel} alt={p.baslik} className="w-11 h-11 rounded object-cover border border-neutral-800" />
+                      <img src={p.gorsel} alt={p.baslik} className="w-12 h-12 rounded object-cover border border-neutral-800" />
                     )}
                     <div>
                       <p className="text-sm font-medium">{p.baslik}</p>
