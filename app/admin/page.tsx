@@ -18,6 +18,14 @@ interface Proje {
   gorsel?: string;
 }
 
+interface BekleyenProje {
+  id: string;
+  file: File;
+  onizleme: string;
+  baslik: string;
+  kategori: string;
+}
+
 const BASLIK_HAVUZU: Record<string, string[]> = {
   "Pergola": [
     "Bioklimatik Pergola Uygulaması",
@@ -25,28 +33,33 @@ const BASLIK_HAVUZU: Record<string, string[]> = {
     "Motorlu Raylı Pergola Sistemi",
     "Giyotin Camlı Pergola Projesi",
     "Teras & Bahçe Pergola Uygulaması",
+    "Ticari Mekan Pergola Tavan Sistemi",
   ],
   "Kış Bahçesi": [
     "Modern Villa Kış Bahçesi",
     "Sürme Camlı Kış Bahçesi Uygulaması",
     "Isı Yalıtımlı Kış Bahçesi Projesi",
     "Bahçe Katı Cam Kış Bahçesi",
+    "Dört Mevsim Cam Tavan Kış Bahçesi",
   ],
   "Cam Cephe": [
     "Sistem Cam Cephe Uygulaması",
     "Ticari Showroom Cam Cephe",
     "Giyotin & Sürme Cam Sistemi",
     "Alüminyum Doğrama Cam Cephe",
+    "Panoramik Cam Korkuluk & Cephe",
   ],
   "Çelik Yapı": [
     "Çelik Konstrüksiyon Yapı Projesi",
     "Modern Çelik Çatı & Sundurma",
     "Endüstriyel Çelik Yapı Uygulaması",
+    "Ağır Çelik Konstrüksiyon Sistem",
   ],
   "Prefabrik": [
     "Prefabrik Yapı Uygulaması",
     "Modern Prefabrik Yaşam Alanı",
     "Anahtar Teslim Prefabrik Proje",
+    "Çelik Destekli Prefabrik Konut",
   ],
 };
 
@@ -57,11 +70,10 @@ export default function AdminPage() {
 
   const [talepler, setTalepler] = useState<Talep[]>([]);
   const [projeler, setProjeler] = useState<Proje[]>([]);
-  const [yeniProje, setYeniProje] = useState("");
-  const [yeniKategori, setYeniKategori] = useState("Pergola");
-  const [secilenDosya, setSecilenDosya] = useState<File | null>(null);
-  const [otoNot, setOtoNot] = useState("");
+  const [bekleyenler, setBekleyenler] = useState<BekleyenProje[]>([]);
+  const [analizEdiliyor, setAnalizEdiliyor] = useState(false);
   const [yukleniyor, setYukleniyor] = useState(false);
+  const [yuklemeDurumu, setYuklemeDurumu] = useState("");
 
   const verileriGetir = async () => {
     try {
@@ -79,90 +91,157 @@ export default function AdminPage() {
     if (girisYapildi) verileriGetir();
   }, [girisYapildi]);
 
-  const gorselAnalizEt = (file: File) => {
-    const ad = file.name.toLowerCase();
-    if (ad.includes("pergola")) return uygulaTahmin("Pergola");
-    if (ad.includes("kis") || ad.includes("kış") || ad.includes("bahce")) return uygulaTahmin("Kış Bahçesi");
-    if (ad.includes("cam") || ad.includes("cephe")) return uygulaTahmin("Cam Cephe");
-    if (ad.includes("celik") || ad.includes("çelik")) return uygulaTahmin("Çelik Yapı");
-    if (ad.includes("prefabrik")) return uygulaTahmin("Prefabrik");
+  // Gelişmiş çok kriterli görüntü analizi
+  const tekGorselAnalizEt = (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+      const ad = file.name.toLowerCase();
+      if (ad.includes("pergola")) return resolve("Pergola");
+      if (ad.includes("kis") || ad.includes("kış") || ad.includes("bahce")) return resolve("Kış Bahçesi");
+      if (ad.includes("cam") || ad.includes("cephe") || ad.includes("giyotin")) return resolve("Cam Cephe");
+      if (ad.includes("celik") || ad.includes("çelik")) return resolve("Çelik Yapı");
+      if (ad.includes("prefabrik")) return resolve("Prefabrik");
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const w = 100;
-        const h = 100;
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-        ctx.drawImage(img, 0, 0, w, h);
-        const data = ctx.getImageData(0, 0, w, h).data;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const w = 120;
+          const h = 120;
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return resolve("Pergola");
 
-        let yesilAlt = 0;
-        let maviCam = 0;
-        let griMetal = 0;
-        let acikDuvar = 0;
-        let tavanCizgi = 0;
+          ctx.drawImage(img, 0, 0, w, h);
+          const data = ctx.getImageData(0, 0, w, h).data;
 
-        for (let y = 0; y < h; y++) {
-          for (let x = 0; x < w; x++) {
-            const i = (y * w + x) * 4;
-            const r = data[i];
-            const g = data[i + 1];
-            const b = data[i + 2];
+          let tavanRitim = 0;      // Pergola lamel / LED şerit geçişleri
+          let koyuTavan = 0;       // Antrasit/koyu pergola tavan konstrüksiyonu
+          let yesilBahce = 0;      // Alt bölgede çim/bitki
+          let camYansima = 0;      // Orta bölgede mavi/cam yansıması
+          let dikeyProfil = 0;     // Cam bölme dikey profilleri
+          let celikGri = 0;        // Endüstriyel gri metalik yüzeyler
+          let acikDuvar = 0;       // Prefabrik açık renk dolu duvar
 
-            if (y < 45 && y > 0) {
+          for (let y = 1; y < h - 1; y++) {
+            for (let x = 1; x < w - 1; x++) {
+              const i = (y * w + x) * 4;
+              const r = data[i];
+              const g = data[i + 1];
+              const b = data[i + 2];
+              const parlaklik = (r + g + b) / 3;
+
               const ustI = ((y - 1) * w + x) * 4;
-              const fark = Math.abs(r - data[ustI]) + Math.abs(g - data[ustI + 1]) + Math.abs(b - data[ustI + 2]);
-              if (fark > 95) tavanCizgi++;
+              const ustParlaklik = (data[ustI] + data[ustI + 1] + data[ustI + 2]) / 3;
+
+              const solI = (y * w + (x - 1)) * 4;
+              const solParlaklik = (data[solI] + data[solI + 1] + data[solI + 2]) / 3;
+
+              // Üst %50: Pergola lamelleri ve LED ışık çizgileri
+              if (y < h * 0.5) {
+                if (Math.abs(parlaklik - ustParlaklik) > 38) tavanRitim++;
+                if (parlaklik < 65) koyuTavan++;
+              }
+
+              // Alt %35: Bahçe / çim yeşili
+              if (y > h * 0.65 && g > r + 14 && g > b + 14 && g > 55) {
+                yesilBahce++;
+              }
+
+              // Orta %20 - %80: Cam yansımaları ve dikey alüminyum profiller
+              if (y >= h * 0.2 && y <= h * 0.8) {
+                if (b > r + 12 && b > 85) camYansima++;
+                if (Math.abs(parlaklik - solParlaklik) > 45 && parlaklik < 95) dikeyProfil++;
+                if (r > 205 && g > 200 && b > 190 && Math.abs(r - b) < 20) acikDuvar++;
+              }
+
+              // Genel metalik gri yoğunluğu
+              if (Math.abs(r - g) < 10 && Math.abs(g - b) < 10 && parlaklik > 75 && parlaklik < 175) {
+                celikGri++;
+              }
             }
-            if (y > 62 && g > r + 12 && g > b + 12) yesilAlt++;
-            if (y >= 20 && y <= 75 && b > r + 15 && b > 90) maviCam++;
-            if (Math.abs(r - g) < 12 && Math.abs(g - b) < 12 && r > 70 && r < 180) griMetal++;
-            if (y >= 30 && y <= 75 && r > 205 && g > 200 && b > 190) acikDuvar++;
           }
-        }
 
-        let secilen = "Pergola";
-        if (yesilAlt > 280) {
-          secilen = "Kış Bahçesi";
-        } else if (tavanCizgi > 420) {
-          secilen = "Pergola";
-        } else if (maviCam > 900) {
-          secilen = "Cam Cephe";
-        } else if (acikDuvar > 1100) {
-          secilen = "Prefabrik";
-        } else if (griMetal > 2600) {
-          secilen = "Çelik Yapı";
-        }
+          // Puanlama sistemi (0-100 ölçeği)
+          const pergolaSkor = (tavanRitim / 18) + (koyuTavan / 45);
+          const kisBahcesiSkor = (yesilBahce / 14) + (dikeyProfil / 28) - (tavanRitim > 650 ? 25 : 0);
+          const camCepheSkor = (camYansima / 22) + (dikeyProfil / 22) - (yesilBahce / 25);
+          const celikSkor = (celikGri / 45) - (yesilBahce / 20) - (camYansima / 30);
+          const prefabrikSkor = (acikDuvar / 32) - (camYansima / 25);
 
-        uygulaTahmin(secilen);
+          const adaylar = [
+            { kategori: "Pergola", skor: pergolaSkor },
+            { kategori: "Kış Bahçesi", skor: kisBahcesiSkor },
+            { kategori: "Cam Cephe", skor: camCepheSkor },
+            { kategori: "Çelik Yapı", skor: celikSkor },
+            { kategori: "Prefabrik", skor: prefabrikSkor },
+          ];
+
+          adaylar.sort((a, b) => b.skor - a.skor);
+          resolve(adaylar[0].kategori);
+        };
+        img.onerror = () => resolve("Pergola");
+        img.src = e.target?.result as string;
       };
-      img.src = e.target?.result as string;
-    };
-    reader.readAsDataURL(file);
+      reader.onerror = () => resolve("Pergola");
+      reader.readAsDataURL(file);
+    });
   };
 
-  const uygulaTahmin = (kategori: string) => {
-    setYeniKategori(kategori);
-    setOtoNot(`Otomatik seçildi: ${kategori}`);
-    const mevcutSayi = projeler.filter((p) => p.kategori === kategori).length;
-    const liste = BASLIK_HAVUZU[kategori] || ["Özel Yapı Uygulaması"];
-    const otoBaslik = liste[mevcutSayi % liste.length];
-    setYeniProje(otoBaslik);
-  };
+  // Toplu fotoğraf seçildiğinde hepsini analiz edip önizleme listesine alır
+  const topluDosyaSecildi = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const dosyalar = Array.from(e.target.files || []);
+    if (dosyalar.length === 0) return;
 
-  const dosyaSecildi = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    setSecilenDosya(file);
-    if (file) {
-      gorselAnalizEt(file);
-    } else {
-      setOtoNot("");
+    setAnalizEdiliyor(true);
+    const sayac: Record<string, number> = {};
+    projeler.forEach((p) => {
+      sayac[p.kategori] = (sayac[p.kategori] || 0) + 1;
+    });
+    bekleyenler.forEach((b) => {
+      sayac[b.kategori] = (sayac[b.kategori] || 0) + 1;
+    });
+
+    const yeniListe: BekleyenProje[] = [];
+    for (let i = 0; i < dosyalar.length; i++) {
+      const file = dosyalar[i];
+      const kategori = await tekGorselAnalizEt(file);
+      const index = sayac[kategori] || 0;
+      sayac[kategori] = index + 1;
+
+      const havuz = BASLIK_HAVUZU[kategori] || ["Özel Yapı Uygulaması"];
+      const baslik = havuz[index % havuz.length];
+
+      yeniListe.push({
+        id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
+        file,
+        onizleme: URL.createObjectURL(file),
+        baslik,
+        kategori,
+      });
     }
+
+    setBekleyenler((prev) => [...prev, ...yeniListe]);
+    setAnalizEdiliyor(false);
+    e.target.value = "";
+  };
+
+  const bekleyenGuncelle = (id: string, alan: "baslik" | "kategori", deger: string) => {
+    setBekleyenler((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        if (alan === "kategori") {
+          const havuz = BASLIK_HAVUZU[deger] || ["Özel Yapı Uygulaması"];
+          return { ...item, kategori: deger, baslik: havuz[0] };
+        }
+        return { ...item, baslik: deger };
+      })
+    );
+  };
+
+  const bekleyenSil = (id: string) => {
+    setBekleyenler((prev) => prev.filter((item) => item.id !== id));
   };
 
   const gorselSikistir = (file: File): Promise<string> => {
@@ -188,6 +267,34 @@ export default function AdminPage() {
     });
   };
 
+  // Kontrol edilen tüm fotoğrafları tek seferde yayınla
+  const topluYayinla = async () => {
+    if (bekleyenler.length === 0) return;
+    setYukleniyor(true);
+    try {
+      for (let i = 0; i < bekleyenler.length; i++) {
+        const item = bekleyenler[i];
+        setYuklemeDurumu(`Yükleniyor: ${i + 1} / ${bekleyenler.length}`);
+        const gorselData = await gorselSikistir(item.file);
+        await addDoc(collection(db, "projeler"), {
+          baslik: item.baslik.trim() || "Özel Yapı Uygulaması",
+          kategori: item.kategori,
+          gorsel: gorselData,
+          createdAt: Date.now() + i,
+        });
+      }
+      setBekleyenler([]);
+      setYuklemeDurumu("");
+      await verileriGetir();
+    } catch (err) {
+      alert("Yükleme sırasında hata oldu, Firestore test modunun açık olduğundan emin ol.");
+      console.error(err);
+    } finally {
+      setYukleniyor(false);
+      setYuklemeDurumu("");
+    }
+  };
+
   const girisKontrol = (e: React.FormEvent) => {
     e.preventDefault();
     if (sifre === "admin123") {
@@ -195,35 +302,6 @@ export default function AdminPage() {
       setHata("");
     } else {
       setHata("Hatalı şifre kanka, tekrar dene.");
-    }
-  };
-
-  const projeEkle = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!yeniProje.trim()) return;
-    setYukleniyor(true);
-    try {
-      let gorselData = "";
-      if (secilenDosya) {
-        gorselData = await gorselSikistir(secilenDosya);
-      }
-      await addDoc(collection(db, "projeler"), {
-        baslik: yeniProje.trim(),
-        kategori: yeniKategori,
-        gorsel: gorselData,
-        createdAt: Date.now(),
-      });
-      setYeniProje("");
-      setSecilenDosya(null);
-      setOtoNot("");
-      const fileInput = document.getElementById("dosya-input") as HTMLInputElement;
-      if (fileInput) fileInput.value = "";
-      await verileriGetir();
-    } catch (err) {
-      alert("Yükleme sırasında hata oldu, Firestore test modunun açık olduğundan emin ol.");
-      console.error(err);
-    } finally {
-      setYukleniyor(false);
     }
   };
 
@@ -305,6 +383,94 @@ export default function AdminPage() {
           </div>
         </div>
 
+        {/* TOPLU PROJE EKLEME & KONTROL ALANI */}
+        <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="font-bold text-base">Toplu Proje Ekle & Kontrol Et</h2>
+              <p className="text-xs text-neutral-400">Fotoğrafları toplu seç, otomatik kategorileri kontrol et ve tek tıkla yayınla.</p>
+            </div>
+            <label className="bg-white text-black hover:bg-neutral-200 px-4 py-2.5 rounded-lg text-xs font-bold cursor-pointer text-center transition">
+              {analizEdiliyor ? "Fotoğraflar Ayrıştırılıyor..." : "+ Toplu Fotoğraf Seç"}
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={topluDosyaSecildi}
+                disabled={analizEdiliyor || yukleniyor}
+                className="hidden"
+              />
+            </label>
+          </div>
+
+          {bekleyenler.length > 0 && (
+            <div className="space-y-3 mt-4 border-t border-neutral-800 pt-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-emerald-400">
+                  {bekleyenler.length} fotoğraf hazır — kontrol edip onaylayabilirsin:
+                </span>
+                <button
+                  onClick={() => setBekleyenler([])}
+                  disabled={yukleniyor}
+                  className="text-xs text-neutral-400 hover:text-red-400 cursor-pointer"
+                >
+                  Listeyi Temizle
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[420px] overflow-y-auto pr-1">
+                {bekleyenler.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center gap-3 bg-neutral-950 p-3 rounded-lg border border-neutral-800"
+                  >
+                    <img
+                      src={item.onizleme}
+                      alt={item.baslik}
+                      className="w-16 h-16 rounded-lg object-cover border border-neutral-800 shrink-0"
+                    />
+                    <div className="flex-1 space-y-1.5 min-w-0">
+                      <input
+                        type="text"
+                        value={item.baslik}
+                        onChange={(e) => bekleyenGuncelle(item.id, "baslik", e.target.value)}
+                        className="w-full bg-neutral-900 border border-neutral-800 rounded px-2.5 py-1.5 text-xs focus:outline-none focus:border-white"
+                      />
+                      <select
+                        value={item.kategori}
+                        onChange={(e) => bekleyenGuncelle(item.id, "kategori", e.target.value)}
+                        className="w-full bg-neutral-900 border border-neutral-800 rounded px-2 py-1 text-xs text-emerald-400 font-semibold"
+                      >
+                        <option value="Pergola">Pergola</option>
+                        <option value="Kış Bahçesi">Kış Bahçesi</option>
+                        <option value="Cam Cephe">Cam Cephe</option>
+                        <option value="Çelik Yapı">Çelik Yapı</option>
+                        <option value="Prefabrik">Prefabrik</option>
+                      </select>
+                    </div>
+                    <button
+                      onClick={() => bekleyenSil(item.id)}
+                      disabled={yukleniyor}
+                      className="text-xs text-neutral-500 hover:text-red-400 px-2 py-1 cursor-pointer"
+                      title="Listeden çıkar"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={topluYayinla}
+                disabled={yukleniyor}
+                className="w-full bg-emerald-500 hover:bg-emerald-400 text-black font-bold py-3 rounded-lg text-sm transition cursor-pointer disabled:opacity-50"
+              >
+                {yukleniyor ? yuklemeDurumu : `Hepsini Siteye Yayınla (${bekleyenler.length} Fotoğraf)`}
+              </button>
+            </div>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
             <h2 className="font-bold text-base mb-4">Müşteri Teklif Talepleri</h2>
@@ -328,28 +494,32 @@ export default function AdminPage() {
           </div>
 
           <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
-            <h2 className="font-bold text-base mb-4">Hızlı Proje Ekle / Yönet</h2>
-            <form onSubmit={projeEkle} className="space-y-3 mb-5">
-              <div className="flex items-center gap-2">
-                <input
-                  id="dosya-input"
-                  type="file"
-                  accept="image/*"
-                  onChange={dosyaSecildi}
-                  className="flex-1 text-xs text-neutral-400 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-neutral-800 file:text-white hover:file:bg-neutral-700 cursor-pointer"
-                />
-              </div>
-
-              {otoNot && (
-                <p className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg">
-                  {otoNot}
-                </p>
-              )}
-
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Proje adı (fotoğraf seçince otomatik dolar)..."
-                  value={yeniProje}
-                  onChange={(e) => setYeniProje(e.target.value)}
-                  className="
+            <h2 className="font-bold text-base mb-4">Yayındaki Projeler ({projeler.length})</h2>
+            <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
+              {projeler.map((p) => (
+                <div key={p.id} className="flex items-center justify-between bg-neutral-950 p-3 rounded-lg border border-neutral-800/80">
+                  <div className="flex items-center gap-3">
+                    {p.gorsel && (
+                      <img src={p.gorsel} alt={p.baslik} className="w-12 h-12 rounded object-cover border border-neutral-800" />
+                    )}
+                    <div>
+                      <p className="text-sm font-medium">{p.baslik}</p>
+                      <span className="text-[11px] text-neutral-400">{p.kategori}</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => projeSil(p.id)}
+                    className="text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 px-2.5 py-1 rounded cursor-pointer"
+                  >
+                    Kaldır
+                  </button>
+                </div>
+              ))}
+              {projeler.length === 0 && <p className="text-xs text-neutral-500">Henüz eklenmiş proje yok.</p>}
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
