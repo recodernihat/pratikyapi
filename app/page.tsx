@@ -1,28 +1,76 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { db } from './firebase';
+import { collection, getDocs, addDoc, query, orderBy } from 'firebase/firestore';
+
+interface Proje {
+  id: string;
+  baslik: string;
+  kategori: string;
+  gorsel?: string;
+}
 
 export default function Home() {
-  
   const [adSoyad, setAdSoyad] = useState("");
   const [telefon, setTelefon] = useState("");
   const [hizmet, setHizmet] = useState("Pergola");
   const [randevuAlindi, setRandevuAlindi] = useState(false);
   const [hataMesaji, setHataMesaji] = useState("");
+  const [gonderiliyor, setGonderiliyor] = useState(false);
 
-  const randevuGonder = () => {
-    // BURASI YARIN FORMSPREE ILE GÜNCELLENECEK, ŞU AN SADECE GÖRSEL
+  const [projeler, setProjeler] = useState<Proje[]>([]);
+  const [galeriYukleniyor, setGaleriYukleniyor] = useState(true);
+  const [aktifKategori, setAktifKategori] = useState("Tümü");
+  const [seciliProje, setSeciliProje] = useState<Proje | null>(null);
+
+  useEffect(() => {
+    const projeleriCek = async () => {
+      try {
+        const snap = await getDocs(query(collection(db, "projeler"), orderBy("createdAt", "desc")));
+        setProjeler(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Proje, "id">) })));
+      } catch (err) {
+        console.error("Projeler yüklenemedi:", err);
+      } finally {
+        setGaleriYukleniyor(false);
+      }
+    };
+    projeleriCek();
+  }, []);
+
+  const randevuGonder = async () => {
     if (adSoyad.trim() === "" || telefon.trim() === "") {
       setHataMesaji("Lütfen adınızı ve telefon numaranızı girin.");
-      return; 
+      return;
     }
-    if (telefon.length < 10) {
+    if (telefon.replace(/\s/g, "").length < 10) {
       setHataMesaji("Lütfen geçerli bir telefon numarası girin.");
       return;
     }
     setHataMesaji("");
-    setRandevuAlindi(true);
+    setGonderiliyor(true);
+
+    try {
+      await addDoc(collection(db, "talepler"), {
+        ad: adSoyad.trim(),
+        tel: telefon.trim(),
+        hizmet,
+        createdAt: Date.now(),
+      });
+      setRandevuAlindi(true);
+    } catch (err) {
+      setHataMesaji("Talep gönderilirken bir sorun oluştu, lütfen WhatsApp'tan ulaşın.");
+      console.error(err);
+    } finally {
+      setGonderiliyor(false);
+    }
   };
+
+  const kategoriler = ["Tümü", "Pergola", "Kış Bahçesi", "Cam Cephe", "Çelik Yapı", "Prefabrik"];
+  const filtreliProjeler =
+    aktifKategori === "Tümü"
+      ? projeler
+      : projeler.filter((p) => p.kategori === aktifKategori);
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800 font-sans scroll-smooth">
@@ -64,7 +112,7 @@ export default function Home() {
           </p>
         </div>
         <div className="md:w-1/2 bg-slate-200 aspect-video rounded-xl flex items-center justify-center border-2 border-dashed border-slate-400 shadow-sm">
-           <span className="text-slate-500 font-bold">📸 Kurumsal Ekip/Atölye Fotoğrafı</span>
+          <span className="text-slate-500 font-bold">📸 Kurumsal Ekip/Atölye Fotoğrafı</span>
         </div>
       </section>
 
@@ -89,23 +137,112 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 5. GALERİ */}
+      {/* 5. TAMAMLANMIŞ PROJELER (GALERİ) */}
       <section id="galeri" className="py-20 px-8 max-w-6xl mx-auto text-center">
-        <h2 className="text-3xl font-bold mb-4 text-slate-900">Örnek Uygulamalarımız</h2>
-        <p className="text-gray-600 mb-12">Hayata geçirdiğimiz projelerden kareler ve uygulama videolarımız.</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-          <div className="bg-slate-200 aspect-video rounded-xl flex items-center justify-center border-2 border-slate-300 shadow-sm hover:scale-105 hover:shadow-xl transition-all duration-300 cursor-pointer group">
-            <span className="text-slate-500 font-bold group-hover:text-blue-600">📸 Örnek Proje 1</span>
+        <h2 className="text-3xl font-bold mb-4 text-slate-900">Tamamlanmış Projeler</h2>
+        <p className="text-gray-600 mb-8">Hayata geçirdiğimiz projelerden kareler ve uygulama örneklerimiz.</p>
+
+        {/* Kategori Filtresi */}
+        {projeler.length > 0 && (
+          <div className="flex flex-wrap justify-center gap-2 mb-10">
+            {kategoriler.map((kat) => (
+              <button
+                key={kat}
+                onClick={() => setAktifKategori(kat)}
+                className={`px-4 py-2 rounded-full text-sm font-semibold transition cursor-pointer ${
+                  aktifKategori === kat
+                    ? "bg-blue-600 text-white shadow-md"
+                    : "bg-white text-slate-700 border border-gray-200 hover:bg-gray-100"
+                }`}
+              >
+                {kat}
+              </button>
+            ))}
           </div>
-          <div className="bg-slate-200 aspect-video rounded-xl flex items-center justify-center border-2 border-slate-300 shadow-sm hover:scale-105 hover:shadow-xl transition-all duration-300 cursor-pointer group">
-            <span className="text-slate-500 font-bold group-hover:text-blue-600">📸 Örnek Proje 2</span>
+        )}
+
+        {galeriYukleniyor ? (
+          <p className="text-slate-500 text-sm">Projeler yükleniyor...</p>
+        ) : filtreliProjeler.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+            {filtreliProjeler.map((proje) => (
+              <div
+                key={proje.id}
+                onClick={() => setSeciliProje(proje)}
+                className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group text-left"
+              >
+                <div className="aspect-video bg-slate-200 overflow-hidden relative">
+                  {proje.gorsel ? (
+                    <img
+                      src={proje.gorsel}
+                      alt={proje.baslik}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-slate-400 text-sm">
+                      Görsel Yok
+                    </div>
+                  )}
+                  <span className="absolute top-3 left-3 bg-slate-900/80 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1 rounded-full">
+                    {proje.kategori}
+                  </span>
+                </div>
+                <div className="p-4">
+                  <h3 className="font-bold text-slate-900 text-base group-hover:text-blue-600 transition">
+                    {proje.baslik}
+                  </h3>
+                </div>
+              </div>
+            ))}
           </div>
-          <div className="bg-slate-800 text-white aspect-video rounded-xl flex flex-col items-center justify-center shadow-lg hover:scale-105 hover:shadow-2xl hover:bg-slate-900 transition-all duration-300 cursor-pointer group relative overflow-hidden">
-            <span className="text-5xl mb-2 group-hover:scale-110 transition-transform text-red-500">▶</span>
-            <span className="font-bold tracking-wide">Uygulama Videosu</span>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+            <div className="bg-slate-200 aspect-video rounded-xl flex items-center justify-center border-2 border-slate-300 shadow-sm">
+              <span className="text-slate-500 font-bold">📸 Proje Fotoğrafı Bekleniyor</span>
+            </div>
+            <div className="bg-slate-200 aspect-video rounded-xl flex items-center justify-center border-2 border-slate-300 shadow-sm">
+              <span className="text-slate-500 font-bold">📸 Proje Fotoğrafı Bekleniyor</span>
+            </div>
+            <div className="bg-slate-800 text-white aspect-video rounded-xl flex flex-col items-center justify-center shadow-lg">
+              <span className="text-5xl mb-2 text-red-500">▶</span>
+              <span className="font-bold tracking-wide">Uygulama Videosu</span>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* BÜYÜK GÖRSEL PENCERESİ (MODAL) */}
+      {seciliProje && (
+        <div
+          onClick={() => setSeciliProje(null)}
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl max-w-3xl w-full overflow-hidden shadow-2xl"
+          >
+            {seciliProje.gorsel && (
+              <img
+                src={seciliProje.gorsel}
+                alt={seciliProje.baslik}
+                className="w-full max-h-[75vh] object-contain bg-slate-950"
+              />
+            )}
+            <div className="p-4 flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-blue-600 uppercase">{seciliProje.kategori}</span>
+                <h3 className="font-bold text-lg text-slate-900">{seciliProje.baslik}</h3>
+              </div>
+              <button
+                onClick={() => setSeciliProje(null)}
+                className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-700 cursor-pointer"
+              >
+                Kapat
+              </button>
+            </div>
           </div>
         </div>
-      </section>
+      )}
 
       {/* 6. İLETİŞİM & RANDEVU FORMU */}
       <section id="iletisim" className="py-20 bg-slate-200 px-4 text-center">
@@ -124,7 +261,6 @@ export default function Home() {
             <div className="mt-2 mb-6">
               <h4 className="text-sm font-semibold text-gray-400 mb-3 uppercase tracking-wider">Takip Edin</h4>
               <div className="flex gap-4">
-                {/* INSTAGRAM LİNKİ EKLENDİ, FACEBOOK SİLİNDİ */}
                 <a 
                   href="https://instagram.com/prtyapi" 
                   target="_blank" 
@@ -152,7 +288,7 @@ export default function Home() {
                     setAdSoyad("");
                     setTelefon("");
                   }} 
-                  className="mt-6 text-sm text-green-600 underline hover:text-green-800"
+                  className="mt-6 text-sm text-green-600 underline hover:text-green-800 cursor-pointer"
                 >
                   Yeni bir form gönder
                 </button>
@@ -194,14 +330,17 @@ export default function Home() {
                     <option>Pergola</option>
                     <option>Cam Balkon</option>
                     <option>Kış Bahçesi</option>
+                    <option>Çelik Yapı</option>
+                    <option>Prefabrik</option>
                   </select>
                 </div>
                 <button 
                   type="button" 
+                  disabled={gonderiliyor}
                   onClick={randevuGonder}
-                  className="mt-4 bg-blue-600 text-white p-3 rounded-md hover:bg-blue-700 font-bold transition shadow-md active:scale-95"
+                  className="mt-4 bg-blue-600 text-white p-3 rounded-md hover:bg-blue-700 disabled:opacity-50 font-bold transition shadow-md active:scale-95 cursor-pointer"
                 >
-                  Randevu Talebi Gönder
+                  {gonderiliyor ? "Gönderiliyor..." : "Randevu Talebi Gönder"}
                 </button>
               </form>
             )}
@@ -211,7 +350,7 @@ export default function Home() {
 
       {/* 7. SABİT WHATSAPP BUTONU */}
       <a 
-        href="https://wa.me/905348752122" 
+        href="https://wa.me/905330874097" 
         target="_blank" 
         rel="noopener noreferrer"
         className="fixed bottom-6 right-6 bg-green-500 text-white p-4 rounded-full shadow-2xl hover:bg-green-600 hover:scale-110 transition-all duration-300 z-50 flex items-center justify-center"

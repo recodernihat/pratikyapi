@@ -18,6 +18,14 @@ interface Proje {
   gorsel?: string;
 }
 
+const VARSAYILAN_BASLIKLAR: Record<string, string> = {
+  "Pergola": "Bioklimatik Pergola Uygulaması",
+  "Kış Bahçesi": "Modern Kış Bahçesi Uygulaması",
+  "Cam Cephe": "Sistem Cam Cephe Uygulaması",
+  "Çelik Yapı": "Çelik Konstrüksiyon Yapı Projesi",
+  "Prefabrik": "Prefabrik Yapı Uygulaması",
+};
+
 export default function AdminPage() {
   const [girisYapildi, setGirisYapildi] = useState(false);
   const [sifre, setSifre] = useState("");
@@ -28,6 +36,7 @@ export default function AdminPage() {
   const [yeniProje, setYeniProje] = useState("");
   const [yeniKategori, setYeniKategori] = useState("Pergola");
   const [secilenDosya, setSecilenDosya] = useState<File | null>(null);
+  const [otoNot, setOtoNot] = useState("");
   const [yukleniyor, setYukleniyor] = useState(false);
 
   const verileriGetir = async () => {
@@ -45,6 +54,95 @@ export default function AdminPage() {
   useEffect(() => {
     if (girisYapildi) verileriGetir();
   }, [girisYapildi]);
+
+  // Fotoğrafı analiz edip kategoriyi otomatik tahmin eden fonksiyon
+  const gorselAnalizEt = (file: File) => {
+    const ad = file.name.toLowerCase();
+    if (ad.includes("pergola")) return uygulaTahmin("Pergola");
+    if (ad.includes("kis") || ad.includes("kış") || ad.includes("bahce")) return uygulaTahmin("Kış Bahçesi");
+    if (ad.includes("cam") || ad.includes("cephe")) return uygulaTahmin("Cam Cephe");
+    if (ad.includes("celik") || ad.includes("çelik")) return uygulaTahmin("Çelik Yapı");
+    if (ad.includes("prefabrik")) return uygulaTahmin("Prefabrik");
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const w = 100;
+        const h = 100;
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        ctx.drawImage(img, 0, 0, w, h);
+        const data = ctx.getImageData(0, 0, w, h).data;
+
+        let yesilAlt = 0;
+        let maviCam = 0;
+        let griMetal = 0;
+        let acikDuvar = 0;
+        let tavanCizgi = 0;
+
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const i = (y * w + x) * 4;
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+
+            // Üst yarıda pergola lamelleri / ışıklı tavan kontrastı
+            if (y < 45 && y > 0) {
+              const ustI = ((y - 1) * w + x) * 4;
+              const fark = Math.abs(r - data[ustI]) + Math.abs(g - data[ustI + 1]) + Math.abs(b - data[ustI + 2]);
+              if (fark > 95) tavanCizgi++;
+            }
+            // Alt kısımda çim / bahçe yeşili (Kış Bahçesi)
+            if (y > 62 && g > r + 12 && g > b + 12) yesilAlt++;
+            // Cam yansıması (Cam Cephe)
+            if (y >= 20 && y <= 75 && b > r + 15 && b > 90) maviCam++;
+            // Gri metalik tonlar (Çelik Yapı)
+            if (Math.abs(r - g) < 12 && Math.abs(g - b) < 12 && r > 70 && r < 180) griMetal++;
+            // Açık beyaz/krem cephe duvarı (Prefabrik)
+            if (y >= 30 && y <= 75 && r > 205 && g > 200 && b > 190) acikDuvar++;
+          }
+        }
+
+        let secilen = "Pergola";
+        if (yesilAlt > 280) {
+          secilen = "Kış Bahçesi";
+        } else if (tavanCizgi > 420) {
+          secilen = "Pergola";
+        } else if (maviCam > 900) {
+          secilen = "Cam Cephe";
+        } else if (acikDuvar > 1100) {
+          secilen = "Prefabrik";
+        } else if (griMetal > 2600) {
+          secilen = "Çelik Yapı";
+        }
+
+        uygulaTahmin(secilen);
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const uygulaTahmin = (kategori: string) => {
+    setYeniKategori(kategori);
+    setOtoNot(`Otomatik seçildi: ${kategori}`);
+    setYeniProje((prev) => (prev.trim() === "" ? VARSAYILAN_BASLIKLAR[kategori] : prev));
+  };
+
+  const dosyaSecildi = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    setSecilenDosya(file);
+    if (file) {
+      gorselAnalizEt(file);
+    } else {
+      setOtoNot("");
+    }
+  };
 
   const gorselSikistir = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -96,6 +194,7 @@ export default function AdminPage() {
       });
       setYeniProje("");
       setSecilenDosya(null);
+      setOtoNot("");
       const fileInput = document.getElementById("dosya-input") as HTMLInputElement;
       if (fileInput) fileInput.value = "";
       await verileriGetir();
@@ -210,10 +309,26 @@ export default function AdminPage() {
           <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
             <h2 className="font-bold text-base mb-4">Hızlı Proje Ekle / Yönet</h2>
             <form onSubmit={projeEkle} className="space-y-3 mb-5">
+              <div className="flex items-center gap-2">
+                <input
+                  id="dosya-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={dosyaSecildi}
+                  className="flex-1 text-xs text-neutral-400 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-neutral-800 file:text-white hover:file:bg-neutral-700 cursor-pointer"
+                />
+              </div>
+
+              {otoNot && (
+                <p className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg">
+                  {otoNot}
+                </p>
+              )}
+
               <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="Proje adı yaz (Örn: Villa Kış Bahçesi)..."
+                  placeholder="Proje adı (fotoğraf seçince otomatik dolar)..."
                   value={yeniProje}
                   onChange={(e) => setYeniProje(e.target.value)}
                   className="flex-1 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-white"
@@ -229,16 +344,6 @@ export default function AdminPage() {
                   <option value="Çelik Yapı">Çelik Yapı</option>
                   <option value="Prefabrik">Prefabrik</option>
                 </select>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  id="dosya-input"
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setSecilenDosya(e.target.files?.[0] || null)}
-                  className="flex-1 text-xs text-neutral-400 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-neutral-800 file:text-white hover:file:bg-neutral-700 cursor-pointer"
-                />
                 <button
                   type="submit"
                   disabled={yukleniyor}
