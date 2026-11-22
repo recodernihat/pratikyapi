@@ -66,7 +66,7 @@ export default function Home() {
     }
   };
 
-  const kategoriler = ["Tümü", "Pergola", "Kış Bahçesi", "Cam Cephe"];
+  const kategoriler = ["Tümü", "Pergola", "Kış Bahçesi", "Cam Balkon"];
   const filtreliProjeler =
     aktifKategori === "Tümü"
       ? projeler
