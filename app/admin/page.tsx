@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { db } from "../firebase";
-import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy } from "firebase/firestore";
+import { collection, addDoc, getDocs, deleteDoc, updateDoc, doc, query, orderBy } from "firebase/firestore";
 
 interface Talep {
   id: string;
@@ -26,14 +26,16 @@ interface BekleyenProje {
   kategori: string;
 }
 
+const KATEGORILER = ["Pergola", "Kış Bahçesi", "Cam Balkon"] as const;
+
 const BASLIK_HAVUZU: Record<string, string[]> = {
   "Pergola": [
     "Bioklimatik Pergola Uygulaması",
     "LED Işıklı Açılır Tavan Pergola",
     "Motorlu Raylı Pergola Sistemi",
-    "Giyotin Camlı Pergola Projesi",
-    "Teras & Bahçe Pergola Uygulaması",
+    "Teras & Bahçe Pergola Projesi",
     "Ticari Mekan Pergola Tavan Sistemi",
+    "Antrasit Alüminyum Pergola Uygulaması",
   ],
   "Kış Bahçesi": [
     "Modern Villa Kış Bahçesi",
@@ -41,13 +43,16 @@ const BASLIK_HAVUZU: Record<string, string[]> = {
     "Isı Yalıtımlı Kış Bahçesi Projesi",
     "Bahçe Katı Cam Kış Bahçesi",
     "Dört Mevsim Cam Tavan Kış Bahçesi",
+    "Müstakil Bahçe Kış Bahçesi Sistemi",
   ],
-  "Cam Cephe": [
-    "Sistem Cam Cephe Uygulaması",
-    "Ticari Showroom Cam Cephe",
-    "Giyotin & Sürme Cam Sistemi",
-    "Alüminyum Doğrama Cam Cephe",
-    "Panoramik Cam Korkuluk & Cephe",
+  "Cam Balkon": [
+    "Isıcamlı Katlanır Cam Balkon Uygulaması",
+    "Motorlu Giyotin Cam Balkon Sistemi",
+    "Panoramik Sürme Cam Balkon Projesi",
+    "Eşiksiz Sürgülü Teras Cam Kapama",
+    "Temperli Füme Cam Balkon Uygulaması",
+    "Alüminyum Profilli Balkon Camlama",
+    "Dört Mevsim Yalıtımlı Cam Balkon",
   ],
 };
 
@@ -62,6 +67,7 @@ export default function AdminPage() {
   const [analizEdiliyor, setAnalizEdiliyor] = useState(false);
   const [yukleniyor, setYukleniyor] = useState(false);
   const [yuklemeDurumu, setYuklemeDurumu] = useState("");
+  const [topluIslemYapiliyor, setTopluIslemYapiliyor] = useState(false);
 
   const verileriGetir = async () => {
     try {
@@ -79,79 +85,148 @@ export default function AdminPage() {
     if (girisYapildi) verileriGetir();
   }, [girisYapildi]);
 
-  const tekGorselAnalizEt = (file: File): Promise<string> => {
+  const gorselVerisiAnalizEt = (dataUrl: string, dosyaAdi = ""): Promise<string> => {
     return new Promise((resolve) => {
-      const ad = file.name.toLowerCase();
+      const ad = dosyaAdi.toLowerCase();
       if (ad.includes("pergola")) return resolve("Pergola");
       if (ad.includes("kis") || ad.includes("kış") || ad.includes("bahce")) return resolve("Kış Bahçesi");
-      if (ad.includes("cam") || ad.includes("cephe") || ad.includes("giyotin")) return resolve("Cam Cephe");
+      if (ad.includes("balkon") || ad.includes("giyotin") || ad.includes("surme") || ad.includes("cam")) {
+        return resolve("Cam Balkon");
+      }
 
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          const w = 120;
-          const h = 120;
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) return resolve("Pergola");
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const w = 160;
+        const h = 160;
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return resolve("Pergola");
 
-          ctx.drawImage(img, 0, 0, w, h);
-          const data = ctx.getImageData(0, 0, w, h).data;
+        ctx.drawImage(img, 0, 0, w, h);
+        const data = ctx.getImageData(0, 0, w, h).data;
 
-          let tavanRitim = 0;
-          let koyuTavan = 0;
-          let yesilBahce = 0;
-          let camYansima = 0;
-          let dikeyProfil = 0;
+        const gri = new Float32Array(w * h);
+        for (let i = 0; i < w * h; i++) {
+          const idx = i * 4;
+          gri[i] = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+        }
 
-          for (let y = 1; y < h - 1; y++) {
-            for (let x = 1; x < w - 1; x++) {
-              const i = (y * w + x) * 4;
-              const r = data[i];
-              const g = data[i + 1];
-              const b = data[i + 2];
-              const parlaklik = (r + g + b) / 3;
+        let ustYatayLamel = 0;
+        let ustKoyuKiris = 0;
+        let ustSicakLed = 0;
+        let ortaDikeyProfil = 0;
+        let ortaParlakDisari = 0;
+        let altKorkulukBant = 0;
+        let altTamBoyCam = 0;
+        let altBahceYesil = 0;
 
-              const ustI = ((y - 1) * w + x) * 4;
-              const ustParlaklik = (data[ustI] + data[ustI + 1] + data[ustI + 2]) / 3;
+        const ustPikselSayisi = w * Math.floor(h * 0.42);
+        const ortaPikselSayisi = w * Math.floor(h * 0.5);
+        const altPikselSayisi = w * Math.floor(h * 0.35);
 
-              const solI = (y * w + (x - 1)) * 4;
-              const solParlaklik = (data[solI] + data[solI + 1] + data[solI + 2]) / 3;
+        for (let y = 1; y < h - 1; y++) {
+          let satirYatayKenar = 0;
+          for (let x = 1; x < w - 1; x++) {
+            const p = y * w + x;
+            const idx = p * 4;
+            const r = data[idx];
+            const g = data[idx + 1];
+            const b = data[idx + 2];
+            const parlaklik = gri[p];
 
-              if (y < h * 0.5) {
-                if (Math.abs(parlaklik - ustParlaklik) > 38) tavanRitim++;
-                if (parlaklik < 65) koyuTavan++;
-              }
+            const gx =
+              -gri[(y - 1) * w + (x - 1)] +
+              gri[(y - 1) * w + (x + 1)] -
+              2 * gri[y * w + (x - 1)] +
+              2 * gri[y * w + (x + 1)] -
+              gri[(y + 1) * w + (x - 1)] +
+              gri[(y + 1) * w + (x + 1)];
 
-              if (y > h * 0.65 && g > r + 14 && g > b + 14 && g > 55) {
-                yesilBahce++;
-              }
+            const gy =
+              -gri[(y - 1) * w + (x - 1)] -
+              2 * gri[(y - 1) * w + x] -
+              gri[(y - 1) * w + (x + 1)] +
+              gri[(y + 1) * w + (x - 1)] +
+              2 * gri[(y + 1) * w + x] +
+              gri[(y + 1) * w + (x + 1)];
 
-              if (y >= h * 0.2 && y <= h * 0.8) {
-                if (b > r + 12 && b > 85) camYansima++;
-                if (Math.abs(parlaklik - solParlaklik) > 45 && parlaklik < 95) dikeyProfil++;
-              }
+            const absGx = Math.abs(gx);
+            const absGy = Math.abs(gy);
+
+            if (y < h * 0.42) {
+              if (absGy > 110 && absGy > absGx * 1.25) ustYatayLamel++;
+              if (parlaklik < 65 && Math.max(r, g, b) - Math.min(r, g, b) < 22) ustKoyuKiris++;
+              if (r > 195 && g > 145 && b < 115) ustSicakLed++;
+            }
+
+            if (y >= h * 0.25 && y <= h * 0.75) {
+              if (absGx > 115 && absGx > absGy * 1.35) ortaDikeyProfil++;
+              if (parlaklik > 170) ortaParlakDisari++;
+            }
+
+            if (y >= h * 0.52 && y <= h * 0.82) {
+              if (absGy > 130 && absGy > absGx * 1.4) satirYatayKenar++;
+            }
+
+            if (y > h * 0.65) {
+              if (g > r + 12 && g > b + 12 && g > 50) altBahceYesil++;
+              if (y > h * 0.78 && absGx > 115 && absGx > absGy * 1.4) altTamBoyCam++;
             }
           }
+          if (satirYatayKenar > w * 0.35) altKorkulukBant++;
+        }
 
-          const pergolaSkor = (tavanRitim / 18) + (koyuTavan / 45);
-          const kisBahcesiSkor = (yesilBahce / 14) + (dikeyProfil / 28) - (tavanRitim > 650 ? 25 : 0);
-          const camCepheSkor = (camYansima / 22) + (dikeyProfil / 22) - (yesilBahce / 25);
+        const rLamel = (ustYatayLamel / ustPikselSayisi) * 100;
+        const rKoyuTavan = (ustKoyuKiris / ustPikselSayisi) * 100;
+        const rLed = (ustSicakLed / ustPikselSayisi) * 100;
+        const rDikeyCam = (ortaDikeyProfil / ortaPikselSayisi) * 100;
+        const rParlakDis = (ortaParlakDisari / ortaPikselSayisi) * 100;
+        const rBahce = (altBahceYesil / altPikselSayisi) * 100;
+        const rTamBoyCam = (altTamBoyCam / (altPikselSayisi * 0.6)) * 100;
 
-          const adaylar = [
-            { kategori: "Pergola", skor: pergolaSkor },
-            { kategori: "Kış Bahçesi", skor: kisBahcesiSkor },
-            { kategori: "Cam Cephe", skor: camCepheSkor },
-          ];
+        const pergolaSkor =
+          rLamel * 2.4 +
+          rKoyuTavan * 0.9 +
+          rLed * 4.5 -
+          altKorkulukBant * 1.2;
 
-          adaylar.sort((a, b) => b.skor - a.skor);
-          resolve(adaylar[0].kategori);
-        };
-        img.onerror = () => resolve("Pergola");
-        img.src = e.target?.result as string;
+        const camBalkonSkor =
+          rDikeyCam * 2.6 +
+          altKorkulukBant * 2.2 +
+          rParlakDis * 0.45 -
+          rBahce * 1.1 -
+          rLed * 2.0;
+
+        const kisBahcesiSkor =
+          rBahce * 1.9 +
+          rTamBoyCam * 2.2 +
+          rDikeyCam * 1.4 +
+          rLamel * 0.6 -
+          altKorkulukBant * 1.5;
+
+        const adaylar = [
+          { kategori: "Pergola", skor: pergolaSkor },
+          { kategori: "Cam Balkon", skor: camBalkonSkor },
+          { kategori: "Kış Bahçesi", skor: kisBahcesiSkor },
+        ];
+
+        adaylar.sort((a, b) => b.skor - a.skor);
+        resolve(adaylar[0].kategori);
+      };
+      img.onerror = () => resolve("Pergola");
+      img.src = dataUrl;
+    });
+  };
+
+  const tekDosyaAnalizEt = (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const res = e.target?.result as string;
+        if (!res) return resolve("Pergola");
+        resolve(await gorselVerisiAnalizEt(res, file.name));
       };
       reader.onerror = () => resolve("Pergola");
       reader.readAsDataURL(file);
@@ -174,7 +249,7 @@ export default function AdminPage() {
     const yeniListe: BekleyenProje[] = [];
     for (let i = 0; i < dosyalar.length; i++) {
       const file = dosyalar[i];
-      const kategori = await tekGorselAnalizEt(file);
+      const kategori = await tekDosyaAnalizEt(file);
       const index = sayac[kategori] || 0;
       sayac[kategori] = index + 1;
 
@@ -197,11 +272,11 @@ export default function AdminPage() {
 
   const bekleyenGuncelle = (id: string, alan: "baslik" | "kategori", deger: string) => {
     setBekleyenler((prev) =>
-      prev.map((item) => {
+      prev.map((item, idx) => {
         if (item.id !== id) return item;
         if (alan === "kategori") {
           const havuz = BASLIK_HAVUZU[deger] || ["Özel Yapı Uygulaması"];
-          return { ...item, kategori: deger, baslik: havuz[0] };
+          return { ...item, kategori: deger, baslik: havuz[idx % havuz.length] };
         }
         return { ...item, baslik: deger };
       })
@@ -259,6 +334,66 @@ export default function AdminPage() {
     } finally {
       setYukleniyor(false);
       setYuklemeDurumu("");
+    }
+  };
+
+  // Yayındaki mevcut bir projenin kategorisini tek tıkla değiştir
+  const yayindakiKategoriDegistir = async (id: string, yeniKategori: string) => {
+    const sayac = projeler.filter((p) => p.kategori === yeniKategori).length;
+    const havuz = BASLIK_HAVUZU[yeniKategori] || ["Özel Yapı Uygulaması"];
+    const yeniBaslik = havuz[sayac % havuz.length];
+
+    setProjeler((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, kategori: yeniKategori, baslik: yeniBaslik } : p))
+    );
+    await updateDoc(doc(db, "projeler", id), {
+      kategori: yeniKategori,
+      baslik: yeniBaslik,
+    });
+  };
+
+  // Yayındaki mevcut bir projenin başlığını kaydet
+  const yayindakiBaslikKaydet = async (id: string, yeniBaslik: string) => {
+    if (!yeniBaslik.trim()) return;
+    await updateDoc(doc(db, "projeler", id), { baslik: yeniBaslik.trim() });
+  };
+
+  // Yayındaki tüm karışık projeleri yeni algoritmayla baştan ayır ve isimlendir
+  const yayindakileriYenidenAyir = async () => {
+    if (projeler.length === 0) return;
+    setTopluIslemYapiliyor(true);
+    try {
+      const sayac: Record<string, number> = {};
+      const guncelListe: Proje[] = [];
+
+      for (const p of projeler) {
+        const kategori = p.gorsel ? await gorselVerisiAnalizEt(p.gorsel, "") : "Pergola";
+        const idx = sayac[kategori] || 0;
+        sayac[kategori] = idx + 1;
+        const havuz = BASLIK_HAVUZU[kategori] || ["Özel Yapı Uygulaması"];
+        const baslik = havuz[idx % havuz.length];
+
+        await updateDoc(doc(db, "projeler", p.id), { kategori, baslik });
+        guncelListe.push({ ...p, kategori, baslik });
+      }
+      setProjeler(guncelListe);
+    } finally {
+      setTopluIslemYapiliyor(false);
+    }
+  };
+
+  // Yayındaki tüm projeleri temizle
+  const tumProjeleriSil = async () => {
+    if (projeler.length === 0) return;
+    if (!confirm(`Yayındaki ${projeler.length} fotoğrafın tamamı silinsin mi?`)) return;
+    setTopluIslemYapiliyor(true);
+    try {
+      for (const p of projeler) {
+        await deleteDoc(doc(db, "projeler", p.id));
+      }
+      setProjeler([]);
+    } finally {
+      setTopluIslemYapiliyor(false);
     }
   };
 
@@ -354,7 +489,7 @@ export default function AdminPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
               <h2 className="font-bold text-base">Toplu Proje Ekle & Kontrol Et</h2>
-              <p className="text-xs text-neutral-400">Fotoğrafları toplu seç, otomatik kategorileri kontrol et ve tek tıkla yayınla.</p>
+              <p className="text-xs text-neutral-400">Fotoğrafları toplu seç, kategorileri tek tıkla kontrol et ve yayınla.</p>
             </div>
             <label className="bg-white text-black hover:bg-neutral-200 px-4 py-2.5 rounded-lg text-xs font-bold cursor-pointer text-center transition">
               {analizEdiliyor ? "Fotoğraflar Ayrıştırılıyor..." : "+ Toplu Fotoğraf Seç"}
@@ -384,7 +519,7 @@ export default function AdminPage() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[420px] overflow-y-auto pr-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[460px] overflow-y-auto pr-1">
                 {bekleyenler.map((item) => (
                   <div
                     key={item.id}
@@ -393,24 +528,31 @@ export default function AdminPage() {
                     <img
                       src={item.onizleme}
                       alt={item.baslik}
-                      className="w-16 h-16 rounded-lg object-cover border border-neutral-800 shrink-0"
+                      className="w-20 h-20 rounded-lg object-cover border border-neutral-800 shrink-0"
                     />
-                    <div className="flex-1 space-y-1.5 min-w-0">
+                    <div className="flex-1 space-y-2 min-w-0">
                       <input
                         type="text"
                         value={item.baslik}
                         onChange={(e) => bekleyenGuncelle(item.id, "baslik", e.target.value)}
                         className="w-full bg-neutral-900 border border-neutral-800 rounded px-2.5 py-1.5 text-xs focus:outline-none focus:border-white"
                       />
-                      <select
-                        value={item.kategori}
-                        onChange={(e) => bekleyenGuncelle(item.id, "kategori", e.target.value)}
-                        className="w-full bg-neutral-900 border border-neutral-800 rounded px-2 py-1 text-xs text-emerald-400 font-semibold"
-                      >
-                        <option value="Pergola">Pergola</option>
-                        <option value="Kış Bahçesi">Kış Bahçesi</option>
-                        <option value="Cam Cephe">Cam Cephe</option>
-                      </select>
+                      <div className="flex gap-1.5">
+                        {KATEGORILER.map((kat) => (
+                          <button
+                            key={kat}
+                            type="button"
+                            onClick={() => bekleyenGuncelle(item.id, "kategori", kat)}
+                            className={`flex-1 py-1 px-1.5 rounded text-[11px] font-semibold transition cursor-pointer ${
+                              item.kategori === kat
+                                ? "bg-emerald-500 text-black"
+                                : "bg-neutral-900 text-neutral-400 hover:bg-neutral-800"
+                            }`}
+                          >
+                            {kat}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                     <button
                       onClick={() => bekleyenSil(item.id)}
@@ -458,24 +600,70 @@ export default function AdminPage() {
           </div>
 
           <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
-            <h2 className="font-bold text-base mb-4">Yayındaki Projeler ({projeler.length})</h2>
-            <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+              <h2 className="font-bold text-base">Yayındaki Projeler ({projeler.length})</h2>
+              {projeler.length > 0 && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={yayindakileriYenidenAyir}
+                    disabled={topluIslemYapiliyor}
+                    className="text-[11px] bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 px-2.5 py-1 rounded font-semibold cursor-pointer disabled:opacity-50"
+                  >
+                    {topluIslemYapiliyor ? "Düzenleniyor..." : "Hepsini Yeniden Ayır"}
+                  </button>
+                  <button
+                    onClick={tumProjeleriSil}
+                    disabled={topluIslemYapiliyor}
+                    className="text-[11px] bg-red-500/15 text-red-400 hover:bg-red-500/25 px-2.5 py-1 rounded font-semibold cursor-pointer disabled:opacity-50"
+                  >
+                    Tümünü Sil
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2.5 max-h-[480px] overflow-y-auto pr-1">
               {projeler.map((p) => (
-                <div key={p.id} className="flex items-center justify-between bg-neutral-950 p-3 rounded-lg border border-neutral-800/80">
-                  <div className="flex items-center gap-3">
+                <div key={p.id} className="flex items-center justify-between gap-3 bg-neutral-950 p-3 rounded-lg border border-neutral-800/80">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
                     {p.gorsel && (
-                      <img src={p.gorsel} alt={p.baslik} className="w-12 h-12 rounded object-cover border border-neutral-800" />
+                      <img src={p.gorsel} alt={p.baslik} className="w-16 h-16 rounded-lg object-cover border border-neutral-800 shrink-0" />
                     )}
-                    <div>
-                      <p className="text-sm font-medium">{p.baslik}</p>
-                      <span className="text-[11px] text-neutral-400">{p.kategori}</span>
+                    <div className="flex-1 space-y-1.5 min-w-0">
+                      <input
+                        type="text"
+                        value={p.baslik}
+                        onChange={(e) =>
+                          setProjeler((prev) =>
+                            prev.map((item) => (item.id === p.id ? { ...item, baslik: e.target.value } : item))
+                          )
+                        }
+                        onBlur={(e) => yayindakiBaslikKaydet(p.id, e.target.value)}
+                        className="w-full bg-neutral-900 border border-neutral-800 rounded px-2 py-1 text-xs focus:outline-none focus:border-white"
+                      />
+                      <div className="flex gap-1">
+                        {KATEGORILER.map((kat) => (
+                          <button
+                            key={kat}
+                            type="button"
+                            onClick={() => yayindakiKategoriDegistir(p.id, kat)}
+                            className={`flex-1 py-1 px-1.5 rounded text-[10px] font-semibold transition cursor-pointer ${
+                              p.kategori === kat
+                                ? "bg-emerald-500 text-black"
+                                : "bg-neutral-900 text-neutral-400 hover:bg-neutral-800"
+                            }`}
+                          >
+                            {kat}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                   <button
                     onClick={() => projeSil(p.id)}
-                    className="text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 px-2.5 py-1 rounded cursor-pointer"
+                    className="text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 px-2.5 py-1.5 rounded cursor-pointer shrink-0"
                   >
-                    Kaldır
+                    Sil
                   </button>
                 </div>
               ))}
