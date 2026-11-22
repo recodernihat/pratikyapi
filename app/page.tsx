@@ -329,7 +329,6 @@ export default function Home() {
                     <option>Pergola</option>
                     <option>Cam Balkon</option>
                     <option>Kış Bahçesi</option>
-                    <option>Cam Cephe</option>
                   </select>
                 </div>
                 <button 
