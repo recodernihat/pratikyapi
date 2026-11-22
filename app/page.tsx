@@ -66,7 +66,7 @@ export default function Home() {
     }
   };
 
-  const kategoriler = ["Tümü", "Pergola", "Kış Bahçesi", "Cam Cephe", "Çelik Yapı", "Prefabrik"];
+  const kategoriler = ["Tümü", "Pergola", "Kış Bahçesi", "Cam Cephe"];
   const filtreliProjeler =
     aktifKategori === "Tümü"
       ? projeler
@@ -142,7 +142,6 @@ export default function Home() {
         <h2 className="text-3xl font-bold mb-4 text-slate-900">Tamamlanmış Projeler</h2>
         <p className="text-gray-600 mb-8">Hayata geçirdiğimiz projelerden kareler ve uygulama örneklerimiz.</p>
 
-        {/* Kategori Filtresi */}
         {projeler.length > 0 && (
           <div className="flex flex-wrap justify-center gap-2 mb-10">
             {kategoriler.map((kat) => (
@@ -330,8 +329,7 @@ export default function Home() {
                     <option>Pergola</option>
                     <option>Cam Balkon</option>
                     <option>Kış Bahçesi</option>
-                    <option>Çelik Yapı</option>
-                    <option>Prefabrik</option>
+                    <option>Cam Cephe</option>
                   </select>
                 </div>
                 <button 

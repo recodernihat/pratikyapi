@@ -49,18 +49,6 @@ const BASLIK_HAVUZU: Record<string, string[]> = {
     "Alüminyum Doğrama Cam Cephe",
     "Panoramik Cam Korkuluk & Cephe",
   ],
-  "Çelik Yapı": [
-    "Çelik Konstrüksiyon Yapı Projesi",
-    "Modern Çelik Çatı & Sundurma",
-    "Endüstriyel Çelik Yapı Uygulaması",
-    "Ağır Çelik Konstrüksiyon Sistem",
-  ],
-  "Prefabrik": [
-    "Prefabrik Yapı Uygulaması",
-    "Modern Prefabrik Yaşam Alanı",
-    "Anahtar Teslim Prefabrik Proje",
-    "Çelik Destekli Prefabrik Konut",
-  ],
 };
 
 export default function AdminPage() {
@@ -91,15 +79,12 @@ export default function AdminPage() {
     if (girisYapildi) verileriGetir();
   }, [girisYapildi]);
 
-  // Gelişmiş çok kriterli görüntü analizi
   const tekGorselAnalizEt = (file: File): Promise<string> => {
     return new Promise((resolve) => {
       const ad = file.name.toLowerCase();
       if (ad.includes("pergola")) return resolve("Pergola");
       if (ad.includes("kis") || ad.includes("kış") || ad.includes("bahce")) return resolve("Kış Bahçesi");
       if (ad.includes("cam") || ad.includes("cephe") || ad.includes("giyotin")) return resolve("Cam Cephe");
-      if (ad.includes("celik") || ad.includes("çelik")) return resolve("Çelik Yapı");
-      if (ad.includes("prefabrik")) return resolve("Prefabrik");
 
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -116,13 +101,11 @@ export default function AdminPage() {
           ctx.drawImage(img, 0, 0, w, h);
           const data = ctx.getImageData(0, 0, w, h).data;
 
-          let tavanRitim = 0;      // Pergola lamel / LED şerit geçişleri
-          let koyuTavan = 0;       // Antrasit/koyu pergola tavan konstrüksiyonu
-          let yesilBahce = 0;      // Alt bölgede çim/bitki
-          let camYansima = 0;      // Orta bölgede mavi/cam yansıması
-          let dikeyProfil = 0;     // Cam bölme dikey profilleri
-          let celikGri = 0;        // Endüstriyel gri metalik yüzeyler
-          let acikDuvar = 0;       // Prefabrik açık renk dolu duvar
+          let tavanRitim = 0;
+          let koyuTavan = 0;
+          let yesilBahce = 0;
+          let camYansima = 0;
+          let dikeyProfil = 0;
 
           for (let y = 1; y < h - 1; y++) {
             for (let x = 1; x < w - 1; x++) {
@@ -138,44 +121,30 @@ export default function AdminPage() {
               const solI = (y * w + (x - 1)) * 4;
               const solParlaklik = (data[solI] + data[solI + 1] + data[solI + 2]) / 3;
 
-              // Üst %50: Pergola lamelleri ve LED ışık çizgileri
               if (y < h * 0.5) {
                 if (Math.abs(parlaklik - ustParlaklik) > 38) tavanRitim++;
                 if (parlaklik < 65) koyuTavan++;
               }
 
-              // Alt %35: Bahçe / çim yeşili
               if (y > h * 0.65 && g > r + 14 && g > b + 14 && g > 55) {
                 yesilBahce++;
               }
 
-              // Orta %20 - %80: Cam yansımaları ve dikey alüminyum profiller
               if (y >= h * 0.2 && y <= h * 0.8) {
                 if (b > r + 12 && b > 85) camYansima++;
                 if (Math.abs(parlaklik - solParlaklik) > 45 && parlaklik < 95) dikeyProfil++;
-                if (r > 205 && g > 200 && b > 190 && Math.abs(r - b) < 20) acikDuvar++;
-              }
-
-              // Genel metalik gri yoğunluğu
-              if (Math.abs(r - g) < 10 && Math.abs(g - b) < 10 && parlaklik > 75 && parlaklik < 175) {
-                celikGri++;
               }
             }
           }
 
-          // Puanlama sistemi (0-100 ölçeği)
           const pergolaSkor = (tavanRitim / 18) + (koyuTavan / 45);
           const kisBahcesiSkor = (yesilBahce / 14) + (dikeyProfil / 28) - (tavanRitim > 650 ? 25 : 0);
           const camCepheSkor = (camYansima / 22) + (dikeyProfil / 22) - (yesilBahce / 25);
-          const celikSkor = (celikGri / 45) - (yesilBahce / 20) - (camYansima / 30);
-          const prefabrikSkor = (acikDuvar / 32) - (camYansima / 25);
 
           const adaylar = [
             { kategori: "Pergola", skor: pergolaSkor },
             { kategori: "Kış Bahçesi", skor: kisBahcesiSkor },
             { kategori: "Cam Cephe", skor: camCepheSkor },
-            { kategori: "Çelik Yapı", skor: celikSkor },
-            { kategori: "Prefabrik", skor: prefabrikSkor },
           ];
 
           adaylar.sort((a, b) => b.skor - a.skor);
@@ -189,7 +158,6 @@ export default function AdminPage() {
     });
   };
 
-  // Toplu fotoğraf seçildiğinde hepsini analiz edip önizleme listesine alır
   const topluDosyaSecildi = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const dosyalar = Array.from(e.target.files || []);
     if (dosyalar.length === 0) return;
@@ -267,7 +235,6 @@ export default function AdminPage() {
     });
   };
 
-  // Kontrol edilen tüm fotoğrafları tek seferde yayınla
   const topluYayinla = async () => {
     if (bekleyenler.length === 0) return;
     setYukleniyor(true);
@@ -383,7 +350,6 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* TOPLU PROJE EKLEME & KONTROL ALANI */}
         <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
@@ -444,8 +410,6 @@ export default function AdminPage() {
                         <option value="Pergola">Pergola</option>
                         <option value="Kış Bahçesi">Kış Bahçesi</option>
                         <option value="Cam Cephe">Cam Cephe</option>
-                        <option value="Çelik Yapı">Çelik Yapı</option>
-                        <option value="Prefabrik">Prefabrik</option>
                       </select>
                     </div>
                     <button
