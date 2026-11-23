@@ -20,6 +20,7 @@ interface SistemBilgi {
   aciklama: string;
   ozellikler: string[];
   teknikDetaylar: { etiket: string; deger: string }[];
+  renkSecenekleri: { ad: string; hex: string }[];
 }
 
 const SISTEMLER: SistemBilgi[] = [
@@ -40,8 +41,14 @@ const SISTEMLER: SistemBilgi[] = [
     teknikDetaylar: [
       { etiket: "Profil Malzemesi", deger: "6063-T6 Ekstrüzyon Alüminyum" },
       { etiket: "Boya Standardı", deger: "Qualicoat Elektrostatik Toz Boya" },
-      { etiket: "Otomasyon", deger: "Uzaktan Kumanda + Mobil Uygulama Desteği" },
+      { etiket: "Otomasyon", deger: "Uzaktan Kumanda + Akıllı Telefon Kontrolü" },
       { etiket: "Garanti Süresi", deger: "5 Yıl Motor & Mekanik Sistem Garantisi" },
+    ],
+    renkSecenekleri: [
+      { ad: "Antrasit Gri (RAL 7016)", hex: "#2f353b" },
+      { ad: "Mat Siyah (RAL 9005)", hex: "#141414" },
+      { ad: "Altın Meşe Ahşap", hex: "#8b5a2b" },
+      { ad: "Krem Beyaz (RAL 9016)", hex: "#e5e5e0" },
     ],
   },
   {
@@ -64,6 +71,12 @@ const SISTEMLER: SistemBilgi[] = [
       { etiket: "Taşıyıcı Statik", deger: "Gizli Çelik Takviyeli Alüminyum Konstrüksiyon" },
       { etiket: "Teslimat", deger: "Özel Ölçü Projelendirme & Hızlı Montaj" },
     ],
+    renkSecenekleri: [
+      { ad: "Antrasit Gri (RAL 7016)", hex: "#2f353b" },
+      { ad: "Bronz Eloksal", hex: "#4a3c31" },
+      { ad: "Mat Siyah (RAL 9005)", hex: "#141414" },
+      { ad: "Ceviz Ahşap Kaplama", hex: "#5c3a21" },
+    ],
   },
   {
     id: "cam-balkon",
@@ -81,9 +94,15 @@ const SISTEMLER: SistemBilgi[] = [
     ],
     teknikDetaylar: [
       { etiket: "Cam Kalınlığı", deger: "8 mm / 10 mm Temperli veya Isıcamlı" },
-      { etiket: "Renk Seçenekleri", deger: "Şeffaf, Füme, Bronz ve Reflekte Cam" },
+      { etiket: "Cam Renkleri", deger: "Şeffaf, Füme, Bronz ve Reflekte Cam" },
       { etiket: "Hareket Mekanizması", deger: "Çelik Zincir & Sessiz Rulmanı Taşıyıcı" },
       { etiket: "Kullanım Alanı", deger: "Balkon, Teras, Kafe & Restoran Cepheleri" },
+    ],
+    renkSecenekleri: [
+      { ad: "Antrasit Profil + Füme Cam", hex: "#2f353b" },
+      { ad: "Siyah Profil + Şeffaf Cam", hex: "#18181b" },
+      { ad: "Eloksal Gri + Bronz Cam", hex: "#71717a" },
+      { ad: "Ahşap Desen + Sinerji Cam", hex: "#784b2a" },
     ],
   },
 ];
@@ -140,13 +159,16 @@ const MUSTERI_YORUMLARI = [
   },
 ];
 
+// Yumuşak Scroll Reveal Bileşeni
 function Reveal({
   children,
   delay = 0,
+  direction = "up",
   className = "",
 }: {
   children: React.ReactNode;
   delay?: number;
+  direction?: "up" | "left" | "right" | "scale";
   className?: string;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -162,18 +184,30 @@ function Reveal({
           observer.unobserve(el);
         }
       },
-      { threshold: 0.12 }
+      { threshold: 0.1 }
     );
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
 
+  const baslangicSinifi =
+    direction === "left"
+      ? "opacity-0 -translate-x-10"
+      : direction === "right"
+      ? "opacity-0 translate-x-10"
+      : direction === "scale"
+      ? "opacity-0 scale-95"
+      : "opacity-0 translate-y-10";
+
   return (
     <div
       ref={ref}
-      style={{ transitionDelay: `${delay}ms` }}
-      className={`transition-all duration-700 ease-out ${
-        gorundu ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+      style={{
+        transitionDelay: `${delay}ms`,
+        transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
+      }}
+      className={`transition-all duration-1000 ${
+        gorundu ? "opacity-100 translate-x-0 translate-y-0 scale-100" : baslangicSinifi
       } ${className}`}
     >
       {children}
@@ -181,18 +215,129 @@ function Reveal({
   );
 }
 
+// Animasyonlu Sayaç Bileşeni
+function AnimatedCounter({
+  hedef,
+  sonEk = "",
+  onEk = "",
+}: {
+  hedef: number;
+  sonEk?: string;
+  onEk?: string;
+}) {
+  const ref = useRef<HTMLSpanElement | null>(null);
+  const [deger, setDeger] = useState(0);
+  const [basladi, setBasladi] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !basladi) {
+          setBasladi(true);
+        }
+      },
+      { threshold: 0.3 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [basladi]);
+
+  useEffect(() => {
+    if (!basladi) return;
+    const sure = 1600;
+    const baslangic = performance.now();
+
+    const adim = (simdi: number) => {
+      const gecen = simdi - baslangic;
+      const oran = Math.min(gecen / sure, 1);
+      const yumusak = 1 - Math.pow(1 - oran, 3);
+      setDeger(Math.floor(yumusak * hedef));
+      if (oran < 1) requestAnimationFrame(adim);
+    };
+    requestAnimationFrame(adim);
+  }, [basladi, hedef]);
+
+  return (
+    <span ref={ref}>
+      {onEk}
+      {deger.toLocaleString("tr-TR")}
+      {sonEk}
+    </span>
+  );
+}
+
+// 3D Tilt & Spotlight Kart Bileşeni
+function TiltCard({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const [stil, setStil] = useState<React.CSSProperties>({});
+
+  const fareHareket = (e: React.MouseEvent<HTMLDivElement>) => {
+    const el = cardRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    const rotateX = ((y - centerY) / centerY) * -4;
+    const rotateY = ((x - centerX) / centerX) * 4;
+
+    setStil({
+      transform: `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.01, 1.01, 1.01)`,
+      backgroundImage: `radial-gradient(circle at ${x}px ${y}px, rgba(245, 158, 11, 0.08), transparent 60%)`,
+    });
+  };
+
+  const fareCikis = () => {
+    setStil({
+      transform: "perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)",
+    });
+  };
+
+  return (
+    <div
+      ref={cardRef}
+      onMouseMove={fareHareket}
+      onMouseLeave={fareCikis}
+      style={stil}
+      className={`transition-transform duration-300 ease-out ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
 export default function Home() {
-  // Navbar & Scroll State
+  // Açılış Perdesi
+  const [perdeAcildi, setPerdeAcildi] = useState(false);
+
+  // Scroll & Progress State
   const [kaydirildi, setKaydirildi] = useState(false);
+  const [scrollYuzde, setScrollYuzde] = useState(0);
   const [mobilMenuAcik, setMobilMenuAcik] = useState(false);
 
   // Hero Slider State
   const [heroIndex, setHeroIndex] = useState(0);
 
+  // Canlı İnteraktif Sistem Simülatörü State
+  const [simLamelAciklik, setSimLamelAciklik] = useState(35); // 0 - 100
+  const [simLedAcik, setSimLedAcik] = useState(true);
+  const [simGiyotinKapali, setSimGiyotinKapali] = useState(70); // 0 - 100
+  const [simKasaRengi, setSimKasaRengi] = useState<"antrasit" | "siyah" | "ahsap">("antrasit");
+
   // Firestore Galeri State
   const [projeler, setProjeler] = useState<Proje[]>([]);
   const [galeriYukleniyor, setGaleriYukleniyor] = useState(true);
   const [aktifKategori, setAktifKategori] = useState("Tümü");
+  const [galeriGecis, setGaleriGecis] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   // Teknik Detay Modal State
@@ -200,7 +345,7 @@ export default function Home() {
 
   // Keşif Sihirbazı State
   const [sihirbazSistem, setSihirbazSistem] = useState("Pergola");
-  const [sihirbazMetrekare, setSihirbazMetrekare] = useState(24);
+  const [sihirbazMetrekare, setSihirbazMetrekare] = useState(28);
   const [sihirbazEkstralar, setSihirbazEkstralar] = useState<string[]>([
     "Gizli Günışığı LED",
     "Uzaktan Kumanda",
@@ -217,6 +362,13 @@ export default function Home() {
   const [hataMesaji, setHataMesaji] = useState("");
   const [gonderiliyor, setGonderiliyor] = useState(false);
 
+  // Açılış perdesi zamanlayıcısı
+  useEffect(() => {
+    const t = setTimeout(() => setPerdeAcildi(true), 650);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Firestore'dan projeleri çek
   useEffect(() => {
     const projeleriCek = async () => {
       try {
@@ -231,20 +383,28 @@ export default function Home() {
     projeleriCek();
   }, []);
 
-  // Scroll dinleyici
+  // Scroll & İlerleme Çubuğu Dinleyicisi
   useEffect(() => {
-    const onScroll = () => setKaydirildi(window.scrollY > 40);
+    const onScroll = () => {
+      const y = window.scrollY;
+      setKaydirildi(y > 40);
+      const toplamYukseklik =
+        document.documentElement.scrollHeight - document.documentElement.clientHeight;
+      if (toplamYukseklik > 0) {
+        setScrollYuzde(Math.min(100, Math.round((y / toplamYukseklik) * 100)));
+      }
+    };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Hero görselleri otomatik geçiş (5 saniyede bir)
+  // Hero görselleri otomatik geçiş
   const gorselliProjeler = projeler.filter((p) => p.gorsel);
   useEffect(() => {
     if (gorselliProjeler.length <= 1) return;
     const timer = setInterval(() => {
-      setHeroIndex((prev) => (prev + 1) % Math.min(gorselliProjeler.length, 5));
-    }, 5500);
+      setHeroIndex((prev) => (prev + 1) % Math.min(gorselliProjeler.length, 6));
+    }, 5000);
     return () => clearInterval(timer);
   }, [gorselliProjeler.length]);
 
@@ -254,7 +414,16 @@ export default function Home() {
       ? projeler
       : projeler.filter((p) => p.kategori === aktifKategori);
 
-  // Lightbox klavye kontrolü (Sol/Sağ ok ve ESC)
+  const kategoriDegistir = (kat: string) => {
+    if (kat === aktifKategori) return;
+    setGaleriGecis(true);
+    setTimeout(() => {
+      setAktifKategori(kat);
+      setGaleriGecis(false);
+    }, 180);
+  };
+
+  // Lightbox klavye kontrolü
   useEffect(() => {
     if (lightboxIndex === null) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -326,39 +495,80 @@ export default function Home() {
     formaGit(ozet);
   };
 
-  const vitrinGorselleri = gorselliProjeler.slice(0, 5);
+  const vitrinGorselleri = gorselliProjeler.slice(0, 6);
   const kurumsalGorsel = gorselliProjeler[1]?.gorsel || gorselliProjeler[0]?.gorsel;
   const aktifLightboxProje =
     lightboxIndex !== null ? filtreliProjeler[lightboxIndex] : null;
+
+  const kasaRenkKodu =
+    simKasaRengi === "antrasit"
+      ? "#2d3339"
+      : simKasaRengi === "siyah"
+      ? "#141416"
+      : "#7c4d2b";
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 font-sans scroll-smooth selection:bg-amber-500 selection:text-black overflow-x-hidden">
       <style>{`
         @keyframes kenburns {
           0% { transform: scale(1) translate(0, 0); }
-          50% { transform: scale(1.08) translate(-1%, -1%); }
+          50% { transform: scale(1.09) translate(-1.2%, -1%); }
           100% { transform: scale(1) translate(0, 0); }
         }
         .animate-kenburns {
-          animation: kenburns 18s ease-in-out infinite;
+          animation: kenburns 20s ease-in-out infinite;
         }
-        @keyframes pulseSlow {
-          0%, 100% { opacity: 0.45; }
-          50% { opacity: 0.85; }
+        @keyframes shimmer {
+          0% { background-position: -200% center; }
+          100% { background-position: 200% center; }
         }
-        .animate-glow {
-          animation: pulseSlow 4s ease-in-out infinite;
+        .animate-shimmer {
+          background-size: 200% auto;
+          animation: shimmer 5s linear infinite;
+        }
+        @keyframes floatY {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-6px); }
+        }
+        .animate-float {
+          animation: floatY 3.5s ease-in-out infinite;
         }
       `}</style>
+
+      {/* AÇILIŞ MİMARİ PERDE ANİMASYONU */}
+      <div
+        className={`fixed inset-0 z-[100] bg-neutral-950 flex flex-col items-center justify-center pointer-events-none transition-all duration-1000 ease-in-out ${
+          perdeAcildi ? "-translate-y-full opacity-0" : "translate-y-0 opacity-100"
+        }`}
+      >
+        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 text-black font-black text-base flex flex-col items-center justify-center leading-none shadow-2xl shadow-amber-500/30 mb-4">
+          <span>PRATİK</span>
+          <span className="text-[10px] tracking-widest mt-1">YAPI</span>
+        </div>
+        <div className="text-xl font-black tracking-[0.35em] text-white uppercase">
+          PRATİK<span className="text-amber-400">YAPI</span>
+        </div>
+        <div className="w-40 h-0.5 bg-neutral-800 mt-4 overflow-hidden rounded-full">
+          <div className="h-full bg-amber-400 w-full transition-transform duration-700 origin-left" />
+        </div>
+      </div>
+
+      {/* ÜST ALTIN SCROLL İLERLEME ÇİZGİSİ */}
+      <div className="fixed top-0 left-0 right-0 h-[3px] z-[60] bg-transparent pointer-events-none">
+        <div
+          className="h-full bg-gradient-to-r from-amber-400 via-amber-500 to-amber-300 transition-all duration-150"
+          style={{ width: `${scrollYuzde}%` }}
+        />
+      </div>
 
       {/* 1. ÜST MİKRO BİLGİ ŞERİDİ */}
       <div className="bg-neutral-900 border-b border-white/10 text-[11px] text-neutral-400 py-2 px-6 hidden md:block">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-6">
-            <span>📍 Avcılar, İstanbul — Tüm İstanbul’a Ücretsiz Keşif</span>
-            <span>🛡️ 20 Yıllık Sektör Tecrübesi & Garantili İşçilik</span>
+            <span>📍 Avcılar, İstanbul — Tüm İstanbul’a Ücretsiz Yerinde Keşif</span>
+            <span>🛡️ 20 Yıllık Sektör Tecrübesi & 5 Yıl Sistem Garantisi</span>
           </div>
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-5 font-medium">
             <a href="tel:+905348752122" className="hover:text-amber-400 transition">
               📞 +90 534 875 21 22
             </a>
@@ -373,13 +583,13 @@ export default function Home() {
       <nav
         className={`sticky top-0 z-50 transition-all duration-500 px-6 md:px-12 ${
           kaydirildi
-            ? "bg-neutral-950/90 backdrop-blur-xl border-b border-white/10 py-3.5 shadow-2xl shadow-black/60"
+            ? "bg-neutral-950/90 backdrop-blur-xl border-b border-white/10 py-3.5 shadow-2xl shadow-black/70"
             : "bg-neutral-950/60 backdrop-blur-md border-b border-white/5 py-5"
         }`}
       >
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <a href="#" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-black font-black text-xs flex flex-col items-center justify-center leading-none shadow-lg shadow-amber-500/20 group-hover:scale-105 transition-transform">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-black font-black text-xs flex flex-col items-center justify-center leading-none shadow-lg shadow-amber-500/20 group-hover:rotate-3 group-hover:scale-105 transition-all duration-300">
               <span>PRATİK</span>
               <span className="text-[8px] tracking-widest mt-0.5">YAPI</span>
             </div>
@@ -393,24 +603,30 @@ export default function Home() {
             </div>
           </a>
 
-          <div className="hidden lg:flex items-center space-x-8 text-sm font-medium text-neutral-300">
-            <a href="#sistemler" className="hover:text-amber-400 transition-colors">
+          <div className="hidden lg:flex items-center space-x-7 text-sm font-medium text-neutral-300">
+            <a href="#sistemler" className="hover:text-amber-400 transition-colors relative py-1 group">
               Sistemlerimiz
+              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-amber-400 transition-all duration-300 group-hover:w-full" />
             </a>
-            <a href="#sihirbaz" className="hover:text-amber-400 transition-colors">
-              Keşif Sihirbazı
+            <a href="#simulator" className="hover:text-amber-400 transition-colors relative py-1 group">
+              Canlı Simülatör
+              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-amber-400 transition-all duration-300 group-hover:w-full" />
             </a>
-            <a href="#galeri" className="hover:text-amber-400 transition-colors">
+            <a href="#galeri" className="hover:text-amber-400 transition-colors relative py-1 group">
               Projelerimiz
+              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-amber-400 transition-all duration-300 group-hover:w-full" />
             </a>
-            <a href="#surec" className="hover:text-amber-400 transition-colors">
-              Çalışma Süreci
+            <a href="#sihirbaz" className="hover:text-amber-400 transition-colors relative py-1 group">
+              Keşif Planlayıcı
+              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-amber-400 transition-all duration-300 group-hover:w-full" />
             </a>
-            <a href="#kurumsal" className="hover:text-amber-400 transition-colors">
+            <a href="#kurumsal" className="hover:text-amber-400 transition-colors relative py-1 group">
               Kurumsal
+              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-amber-400 transition-all duration-300 group-hover:w-full" />
             </a>
-            <a href="#sss" className="hover:text-amber-400 transition-colors">
+            <a href="#sss" className="hover:text-amber-400 transition-colors relative py-1 group">
               S.S.S
+              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-amber-400 transition-all duration-300 group-hover:w-full" />
             </a>
           </div>
 
@@ -439,11 +655,14 @@ export default function Home() {
             <a href="#sistemler" onClick={() => setMobilMenuAcik(false)} className="py-1.5 hover:text-amber-400">
               Sistemlerimiz
             </a>
-            <a href="#sihirbaz" onClick={() => setMobilMenuAcik(false)} className="py-1.5 hover:text-amber-400">
-              Keşif & Fiyat Sihirbazı
+            <a href="#simulator" onClick={() => setMobilMenuAcik(false)} className="py-1.5 hover:text-amber-400">
+              Canlı Pergola & Cam Simülatörü
             </a>
             <a href="#galeri" onClick={() => setMobilMenuAcik(false)} className="py-1.5 hover:text-amber-400">
               Tamamlanmış Projeler
+            </a>
+            <a href="#sihirbaz" onClick={() => setMobilMenuAcik(false)} className="py-1.5 hover:text-amber-400">
+              Keşif & Fiyat Planlayıcı
             </a>
             <a href="#kurumsal" onClick={() => setMobilMenuAcik(false)} className="py-1.5 hover:text-amber-400">
               Kurumsal
@@ -462,15 +681,14 @@ export default function Home() {
         )}
       </nav>
 
-      {/* 3. OTOMATİK GEÇİŞLİ MİMARİ HERO VİTRİN */}
-      <section className="relative min-h-[92vh] flex items-center justify-center px-6 py-24 overflow-hidden">
-        {/* Arka Plan Dinamik Görsel Geçişi */}
+      {/* 3. SİNEMATİK KEN BURNS HERO VİTRİN */}
+      <section className="relative min-h-[93vh] flex items-center justify-center px-6 py-24 overflow-hidden">
         {vitrinGorselleri.length > 0 ? (
           vitrinGorselleri.map((item, idx) => (
             <div
               key={item.id}
               className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
-                idx === heroIndex ? "opacity-40" : "opacity-0"
+                idx === heroIndex ? "opacity-45" : "opacity-0"
               }`}
             >
               <img
@@ -481,55 +699,72 @@ export default function Home() {
             </div>
           ))
         ) : (
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-amber-500/10 via-neutral-950 to-neutral-950" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-amber-500/15 via-neutral-950 to-neutral-950" />
         )}
 
-        {/* Katmanlı Sinematik Karartma & Mimari Izgara */}
-        <div className="absolute inset-0 bg-gradient-to-b from-neutral-950/90 via-neutral-950/60 to-neutral-950" />
+        <div className="absolute inset-0 bg-gradient-to-b from-neutral-950/90 via-neutral-950/55 to-neutral-950" />
         <div
           className="absolute inset-0 opacity-[0.04]"
           style={{
             backgroundImage:
               "linear-gradient(to right, #ffffff 1px, transparent 1px), linear-gradient(to bottom, #ffffff 1px, transparent 1px)",
-            backgroundSize: "64px 64px",
+            backgroundSize: "72px 72px",
           }}
         />
 
         <div className="relative z-10 max-w-5xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 border border-amber-400/30 bg-amber-500/10 backdrop-blur-md text-amber-300 text-xs font-bold tracking-[0.2em] uppercase px-5 py-2 rounded-full mb-8">
-            <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-            <span>20 Yıllık Mimari Uygulama & Mühendislik</span>
+          <div
+            className={`transition-all duration-1000 delay-200 ${
+              perdeAcildi ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"
+            }`}
+          >
+            <div className="inline-flex items-center gap-2.5 border border-amber-400/35 bg-amber-500/10 backdrop-blur-md text-amber-300 text-xs font-bold tracking-[0.22em] uppercase px-5 py-2 rounded-full mb-8">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+              <span>20 Yıllık Mimari Uygulama & Mühendislik</span>
+            </div>
           </div>
 
-          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight leading-[1.08] text-white mb-6">
+          <h1
+            className={`text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight leading-[1.07] text-white mb-6 transition-all duration-1000 delay-300 ${
+              perdeAcildi ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+            }`}
+          >
             Mekanlarınıza Değer Katan <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-amber-400 to-amber-600">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-amber-400 to-amber-200 animate-shimmer">
               Bioklimatik & Cam Sistemleri
             </span>
           </h1>
 
-          <p className="text-base sm:text-xl text-neutral-300 max-w-2xl mx-auto mb-10 leading-relaxed font-normal">
-            Işıklı otomatik pergola, dört mevsim ısı yalıtımlı kış bahçesi ve motorlu giyotin cam balkon çözümleriyle yaşam alanlarınızı yeniden tasarlıyoruz.
+          <p
+            className={`text-base sm:text-xl text-neutral-300 max-w-2xl mx-auto mb-10 leading-relaxed transition-all duration-1000 delay-500 ${
+              perdeAcildi ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+            }`}
+          >
+            Işıklı otomatik pergola, dört mevsim ısı yalıtımlı kış bahçesi ve motorlu giyotin cam balkon çözümleriyle teras ve bahçelerinizi yeniden tasarlıyoruz.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <div
+            className={`flex flex-col sm:flex-row items-center justify-center gap-4 transition-all duration-1000 delay-700 ${
+              perdeAcildi ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+            }`}
+          >
             <a
               href="#iletisim"
-              className="w-full sm:w-auto bg-amber-500 hover:bg-amber-400 text-black font-bold px-8 py-4 rounded-xl text-base transition-all duration-300 shadow-2xl shadow-amber-500/30 hover:-translate-y-0.5"
+              className="w-full sm:w-auto bg-amber-500 hover:bg-amber-400 text-black font-bold px-8 py-4 rounded-xl text-base transition-all duration-300 shadow-2xl shadow-amber-500/30 hover:-translate-y-1"
             >
               Ücretsiz Keşif Randevusu Al
             </a>
             <a
-              href="#galeri"
-              className="w-full sm:w-auto bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/15 text-white font-semibold px-8 py-4 rounded-xl text-base transition-all duration-300 hover:-translate-y-0.5"
+              href="#simulator"
+              className="w-full sm:w-auto bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/15 text-white font-semibold px-8 py-4 rounded-xl text-base transition-all duration-300 hover:-translate-y-1"
             >
-              Tamamlanan Projeler ({projeler.length})
+              Canlı Sistemi Test Et ✦
             </a>
           </div>
 
-          {/* Vitrin Slayt Göstergesi */}
+          {/* Vitrin Slayt Kontrolleri */}
           {vitrinGorselleri.length > 1 && (
-            <div className="mt-14 flex flex-col items-center gap-2">
+            <div className="mt-14 flex flex-col items-center gap-2.5">
               <div className="flex items-center gap-2">
                 {vitrinGorselleri.map((item, idx) => (
                   <button
@@ -537,44 +772,63 @@ export default function Home() {
                     onClick={() => setHeroIndex(idx)}
                     className={`h-1.5 rounded-full transition-all duration-500 cursor-pointer ${
                       idx === heroIndex
-                        ? "w-10 bg-amber-400"
-                        : "w-2.5 bg-white/25 hover:bg-white/50"
+                        ? "w-12 bg-amber-400"
+                        : "w-3 bg-white/25 hover:bg-white/50"
                     }`}
                     aria-label={item.baslik}
                   />
                 ))}
               </div>
-              <span className="text-[11px] text-neutral-400 tracking-wide">
+              <span className="text-[11px] text-neutral-400 tracking-wider">
                 {vitrinGorselleri[heroIndex]?.kategori} • {vitrinGorselleri[heroIndex]?.baslik}
               </span>
             </div>
           )}
+
+          {/* Aşağı Kaydır İndikatörü */}
+          <div className="mt-10 hidden sm:flex justify-center">
+            <a
+              href="#sistemler"
+              className="w-6 h-10 rounded-full border border-white/20 flex items-start justify-center p-1.5 text-amber-400 animate-float"
+              aria-label="Aşağı Kaydır"
+            >
+              <span className="w-1 h-2 bg-amber-400 rounded-full" />
+            </a>
+          </div>
         </div>
       </section>
 
-      {/* 4. GÜVEN & SAYAÇ ŞERİDİ */}
+      {/* 4. ANİMASYONLU GÜVEN & SAYAÇ ŞERİDİ */}
       <section className="border-y border-white/10 bg-neutral-900/50 py-12 px-6">
         <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
           <Reveal delay={0}>
-            <p className="text-3xl md:text-4xl font-black text-amber-400">20+</p>
-            <p className="text-xs text-neutral-400 mt-1.5 uppercase tracking-widest">Yıllık Tecrübe</p>
+            <p className="text-3xl md:text-5xl font-black text-amber-400">
+              <AnimatedCounter hedef={20} sonEk="+" />
+            </p>
+            <p className="text-xs text-neutral-400 mt-2 uppercase tracking-widest">Yıllık Tecrübe</p>
           </Reveal>
           <Reveal delay={100}>
-            <p className="text-3xl md:text-4xl font-black text-white">1.500+</p>
-            <p className="text-xs text-neutral-400 mt-1.5 uppercase tracking-widest">Teslim Edilen Proje</p>
+            <p className="text-3xl md:text-5xl font-black text-white">
+              <AnimatedCounter hedef={1500} sonEk="+" />
+            </p>
+            <p className="text-xs text-neutral-400 mt-2 uppercase tracking-widest">Teslim Edilen Proje</p>
           </Reveal>
           <Reveal delay={200}>
-            <p className="text-3xl md:text-4xl font-black text-amber-400">5 Yıl</p>
-            <p className="text-xs text-neutral-400 mt-1.5 uppercase tracking-widest">Motor & Sistem Garantisi</p>
+            <p className="text-3xl md:text-5xl font-black text-amber-400">
+              <AnimatedCounter hedef={5} sonEk=" Yıl" />
+            </p>
+            <p className="text-xs text-neutral-400 mt-2 uppercase tracking-widest">Motor & Sistem Garantisi</p>
           </Reveal>
           <Reveal delay={300}>
-            <p className="text-3xl md:text-4xl font-black text-white">%100</p>
-            <p className="text-xs text-neutral-400 mt-1.5 uppercase tracking-widest">Su & Isı Yalıtımı</p>
+            <p className="text-3xl md:text-5xl font-black text-white">
+              <AnimatedCounter hedef={100} onEk="%" />
+            </p>
+            <p className="text-xs text-neutral-400 mt-2 uppercase tracking-widest">Su & Isı Yalıtımı</p>
           </Reveal>
         </div>
       </section>
 
-      {/* 5. SİSTEMLERİMİZ (DETAYLI KARTLAR + TEKNİK MODAL) */}
+      {/* 5. 3D EĞİMLİ SİSTEM KARTLARI */}
       <section id="sistemler" className="py-24 px-6 max-w-7xl mx-auto">
         <Reveal className="text-center mb-16">
           <span className="text-amber-400 text-xs font-bold tracking-[0.25em] uppercase">
@@ -595,9 +849,8 @@ export default function Home() {
             )?.gorsel;
 
             return (
-              <Reveal key={sistem.id} delay={idx * 120}>
-                <div className="bg-neutral-900 border border-white/10 rounded-3xl overflow-hidden hover:border-amber-500/50 transition-all duration-500 flex flex-col h-full group shadow-xl">
-                  {/* Sistem Vitrin Görseli */}
+              <Reveal key={sistem.id} delay={idx * 140}>
+                <TiltCard className="bg-neutral-900 border border-white/10 rounded-3xl overflow-hidden hover:border-amber-500/50 flex flex-col h-full group shadow-2xl">
                   <div className="relative h-56 bg-neutral-800 overflow-hidden">
                     {kategoriGorseli ? (
                       <img
@@ -610,13 +863,12 @@ export default function Home() {
                         {sistem.kod}
                       </div>
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-neutral-900 via-neutral-900/30 to-transparent" />
-                    <span className="absolute top-4 left-4 bg-black/70 backdrop-blur-md border border-white/15 text-amber-400 font-black text-xs px-3.5 py-1.5 rounded-full">
+                    <div className="absolute inset-0 bg-gradient-to-t from-neutral-900 via-neutral-900/25 to-transparent" />
+                    <span className="absolute top-4 left-4 bg-black/75 backdrop-blur-md border border-white/15 text-amber-400 font-black text-xs px-3.5 py-1.5 rounded-full">
                       {sistem.kod} • {sistem.altBaslik}
                     </span>
                   </div>
 
-                  {/* İçerik */}
                   <div className="p-7 flex-1 flex flex-col justify-between">
                     <div>
                       <h3 className="text-2xl font-bold text-white mb-3 group-hover:text-amber-400 transition-colors">
@@ -641,7 +893,7 @@ export default function Home() {
                         onClick={() => setSeciliSistemModal(sistem)}
                         className="bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3 px-3 rounded-xl text-xs font-bold transition cursor-pointer"
                       >
-                        Teknik Detaylar
+                        Teknik & Renkler
                       </button>
                       <button
                         onClick={() => formaGit(sistem.kategoriAdi)}
@@ -651,14 +903,335 @@ export default function Home() {
                       </button>
                     </div>
                   </div>
-                </div>
+                </TiltCard>
               </Reveal>
             );
           })}
         </div>
       </section>
 
-      {/* 6. İNTERAKTİF PROJE KEŞİF SİHİRBAZI */}
+      {/* 6. CANLI İNTERAKTİF BİOKLİMATİK PERGOLA & GİYOTİN CAM SİMÜLATÖRÜ */}
+      <section id="simulator" className="py-24 px-6 bg-neutral-900/50 border-y border-white/10">
+        <div className="max-w-6xl mx-auto">
+          <Reveal className="text-center mb-14">
+            <span className="text-amber-400 text-xs font-bold tracking-[0.25em] uppercase">
+              İnteraktif Deneyim
+            </span>
+            <h2 className="text-3xl md:text-5xl font-extrabold mt-2 text-white">
+              Canlı Pergola & Giyotin Cam Kontrolü
+            </h2>
+            <p className="text-neutral-400 mt-3 max-w-2xl mx-auto text-sm md:text-base">
+              Sistemlerimizin çalışma mantığını canlı test edin: Tavan lamellerini döndürün, LED aydınlatmayı açın ve giyotin camı hareket ettirin.
+            </p>
+          </Reveal>
+
+          <Reveal>
+            <div className="bg-neutral-950 border border-white/10 rounded-3xl p-6 md:p-10 shadow-2xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+              {/* Sol: Canlı Mimari Sahne */}
+              <div className="lg:col-span-7 relative rounded-2xl overflow-hidden border border-white/10 h-[340px] sm:h-[400px] bg-gradient-to-b from-slate-900 via-slate-800 to-neutral-900 flex flex-col justify-between p-6 select-none">
+                {/* Gökyüzü / Güneş Işığı Efekti */}
+                <div
+                  className="absolute inset-0 transition-opacity duration-500 pointer-events-none"
+                  style={{
+                    opacity: simLamelAciklik / 100,
+                    background:
+                      "radial-gradient(circle at 50% 0%, rgba(253, 224, 71, 0.35), transparent 70%)",
+                  }}
+                />
+
+                {/* LED Aydınlatma Ortam Parlaması */}
+                <div
+                  className="absolute inset-x-10 top-14 h-44 rounded-full blur-3xl transition-opacity duration-500 pointer-events-none"
+                  style={{
+                    opacity: simLedAcik ? 0.55 : 0,
+                    background: "rgba(251, 191, 36, 0.55)",
+                  }}
+                />
+
+                {/* Üst Bilgi Rozetleri */}
+                <div className="relative z-20 flex items-center justify-between text-[11px] font-bold">
+                  <span className="bg-black/60 backdrop-blur-md border border-white/10 px-3 py-1 rounded-full text-neutral-300">
+                    Tavan Açıklığı: %{simLamelAciklik}
+                  </span>
+                  <span
+                    className={`px-3 py-1 rounded-full border transition ${
+                      simLedAcik
+                        ? "bg-amber-500/20 border-amber-400 text-amber-300"
+                        : "bg-black/60 border-white/10 text-neutral-500"
+                    }`}
+                  >
+                    LED: {simLedAcik ? "AÇIK" : "KAPALI"}
+                  </span>
+                </div>
+
+                {/* Mimari Pergola + Giyotin Cam Konstrüksiyon Çizimi */}
+                <div className="relative z-10 my-auto mx-auto w-full max-w-lg">
+                  {/* Üst Ana Taşıyıcı Kiriş & Dönen Lameller */}
+                  <div
+                    className="h-7 rounded-t-lg border-b border-white/15 flex items-center justify-around px-3 shadow-xl transition-colors duration-500 relative"
+                    style={{ backgroundColor: kasaRenkKodu }}
+                  >
+                    {Array.from({ length: 12 }).map((_, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          transform: `rotate(${simLamelAciklik * 0.75}deg)`,
+                          backgroundColor: kasaRenkKodu,
+                        }}
+                        className="w-5 h-2.5 border border-white/25 rounded-xs transition-transform duration-300 shadow"
+                      />
+                    ))}
+
+                    {/* Entegre LED Şerit Işığı */}
+                    <div
+                      className={`absolute -bottom-1 left-3 right-3 h-1 rounded-full transition-all duration-500 ${
+                        simLedAcik
+                          ? "bg-amber-300 shadow-[0_4px_20px_rgba(251,191,36,0.95)] opacity-100"
+                          : "bg-neutral-700 opacity-30"
+                      }`}
+                    />
+                  </div>
+
+                  {/* Orta Alan: Kolonlar & Hareketli Giyotin Cam */}
+                  <div className="relative h-44 flex justify-between px-2">
+                    {/* Sol Alüminyum Kolon */}
+                    <div
+                      className="w-4 h-full transition-colors duration-500 shadow-lg"
+                      style={{ backgroundColor: kasaRenkKodu }}
+                    />
+
+                    {/* Ortadaki Cam Alanı */}
+                    <div className="flex-1 relative overflow-hidden border-x border-white/10 bg-white/[0.02]">
+                      {/* Hareketli Üst Giyotin Cam Kanadı */}
+                      <div
+                        style={{
+                          transform: `translateY(${(simGiyotinKapali - 100) * 0.65}%)`,
+                        }}
+                        className="absolute inset-x-0 top-0 h-2/3 bg-gradient-to-b from-sky-200/20 to-sky-100/10 border-b-2 border-white/40 backdrop-blur-[1px] transition-transform duration-500 flex items-end justify-center pb-1"
+                      >
+                        <span className="text-[9px] text-white/50 tracking-widest uppercase">
+                          Motorlu Giyotin Cam
+                        </span>
+                      </div>
+
+                      {/* Sabit Alt Küpeşte Camı */}
+                      <div className="absolute inset-x-0 bottom-0 h-1/3 bg-sky-200/15 border-t-2 border-white/30 flex items-center justify-center">
+                        <span className="text-[9px] text-white/40 tracking-widest uppercase">
+                          Sabit Alt Cam Küpeşte
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Sağ Alüminyum Kolon */}
+                    <div
+                      className="w-4 h-full transition-colors duration-500 shadow-lg"
+                      style={{ backgroundColor: kasaRenkKodu }}
+                    />
+                  </div>
+
+                  {/* Teras Zemini */}
+                  <div className="h-4 rounded-b-lg bg-gradient-to-r from-neutral-800 via-neutral-700 to-neutral-800 border-t border-white/15 shadow-2xl" />
+                </div>
+
+                <p className="relative z-20 text-center text-[11px] text-neutral-400">
+                  * Sağdaki kumanda panelinden sistem hareketlerini canlı kontrol edebilirsiniz.
+                </p>
+              </div>
+
+              {/* Sağ: Uzaktan Kumanda Kontrol Paneli */}
+              <div className="lg:col-span-5 space-y-6 bg-neutral-900 border border-white/10 rounded-2xl p-6">
+                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400">
+                      Akıllı Kumanda Paneli
+                    </span>
+                    <h3 className="text-lg font-bold text-white">Sistem Kontrolleri</h3>
+                  </div>
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                </div>
+
+                {/* Tavan Lamel Kontrolü */}
+                <div>
+                  <div className="flex justify-between text-xs font-semibold mb-2">
+                    <span className="text-neutral-300">Tavan Lamel Açısı</span>
+                    <span className="text-amber-400">%{simLamelAciklik}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={simLamelAciklik}
+                    onChange={(e) => setSimLamelAciklik(Number(e.target.value))}
+                    className="w-full accent-amber-500 cursor-pointer h-2 bg-neutral-800 rounded-lg"
+                  />
+                  <div className="flex justify-between text-[10px] text-neutral-500 mt-1">
+                    <span>Tam Kapalı (Yağmur Modu)</span>
+                    <span>Tam Açık (Güneş Modu)</span>
+                  </div>
+                </div>
+
+                {/* Giyotin Cam Kontrolü */}
+                <div>
+                  <div className="flex justify-between text-xs font-semibold mb-2">
+                    <span className="text-neutral-300">Giyotin Cam Kapanma</span>
+                    <span className="text-amber-400">%{simGiyotinKapali}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={simGiyotinKapali}
+                    onChange={(e) => setSimGiyotinKapali(Number(e.target.value))}
+                    className="w-full accent-amber-500 cursor-pointer h-2 bg-neutral-800 rounded-lg"
+                  />
+                  <div className="flex justify-between text-[10px] text-neutral-500 mt-1">
+                    <span>Açık Havalandırma</span>
+                    <span>Tam Kapalı Yalıtım</span>
+                  </div>
+                </div>
+
+                {/* LED Aydınlatma & Kasa Rengi */}
+                <div className="grid grid-cols-2 gap-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setSimLedAcik(!simLedAcik)}
+                    className={`py-3 px-3 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                      simLedAcik
+                        ? "bg-amber-500 text-black border-amber-400 shadow-lg shadow-amber-500/20"
+                        : "bg-neutral-950 text-neutral-300 border-white/10"
+                    }`}
+                  >
+                    💡 LED Işık: {simLedAcik ? "Açık" : "Kapalı"}
+                  </button>
+
+                  <div className="bg-neutral-950 border border-white/10 rounded-xl p-2 flex items-center justify-around">
+                    {[
+                      { id: "antrasit", color: "#2d3339", title: "Antrasit" },
+                      { id: "siyah", color: "#141416", title: "Siyah" },
+                      { id: "ahsap", color: "#7c4d2b", title: "Ahşap" },
+                    ].map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => setSimKasaRengi(r.id as "antrasit" | "siyah" | "ahsap")}
+                        title={r.title}
+                        style={{ backgroundColor: r.color }}
+                        className={`w-7 h-7 rounded-full border-2 transition cursor-pointer ${
+                          simKasaRengi === r.id ? "border-amber-400 scale-110" : "border-white/25"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => formaGit("Bioklimatik Pergola & Giyotin Cam")}
+                  className="w-full bg-white hover:bg-neutral-200 text-black font-bold py-3.5 rounded-xl text-xs transition cursor-pointer"
+                >
+                  Bu Kombinasyon İçin Keşif İste →
+                </button>
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* 7. TAMAMLANMIŞ PROJELER (ANİMASYONLU FİLTRELİ CANLI GALERİ) */}
+      <section id="galeri" className="py-24 px-6 max-w-7xl mx-auto">
+        <Reveal className="text-center mb-12">
+          <span className="text-amber-400 text-xs font-bold tracking-[0.25em] uppercase">
+            Referans Galerimiz
+          </span>
+          <h2 className="text-3xl md:text-5xl font-extrabold mt-2 text-white">
+            Tamamlanmış Projeler
+          </h2>
+          <p className="text-neutral-400 mt-3 max-w-xl mx-auto text-sm md:text-base">
+            Teslim ettiğimiz gerçek uygulamalarımızdan kareler. Detaylı incelemek için fotoğraflara tıklayın.
+          </p>
+        </Reveal>
+
+        {projeler.length > 0 && (
+          <div className="flex flex-wrap justify-center gap-2.5 mb-12">
+            {kategoriler.map((kat) => {
+              const adet =
+                kat === "Tümü"
+                  ? projeler.length
+                  : projeler.filter((p) => p.kategori === kat).length;
+              return (
+                <button
+                  key={kat}
+                  onClick={() => kategoriDegistir(kat)}
+                  className={`px-5 py-2.5 rounded-full text-xs md:text-sm font-bold transition-all duration-300 cursor-pointer ${
+                    aktifKategori === kat
+                      ? "bg-amber-500 text-black shadow-lg shadow-amber-500/25 scale-105"
+                      : "bg-neutral-900 text-neutral-300 border border-white/10 hover:border-white/30"
+                  }`}
+                >
+                  {kat} ({adet})
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {galeriYukleniyor ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3, 4, 5, 6].map((n) => (
+              <div key={n} className="bg-neutral-900 rounded-2xl h-72 animate-pulse border border-white/5" />
+            ))}
+          </div>
+        ) : filtreliProjeler.length > 0 ? (
+          <div
+            className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 transition-all duration-300 ${
+              galeriGecis ? "opacity-0 scale-[0.98]" : "opacity-100 scale-100"
+            }`}
+          >
+            {filtreliProjeler.map((proje, idx) => (
+              <div
+                key={proje.id}
+                onClick={() => setLightboxIndex(idx)}
+                className="bg-neutral-900 rounded-2xl overflow-hidden border border-white/10 hover:border-amber-500/50 transition-all duration-500 cursor-pointer group shadow-lg hover:-translate-y-2"
+              >
+                <div className="aspect-[16/10] bg-neutral-800 overflow-hidden relative">
+                  {proje.gorsel ? (
+                    <img
+                      src={proje.gorsel}
+                      alt={proje.baslik}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-neutral-500 text-sm">
+                      Görsel Yok
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-neutral-950/90 via-transparent to-transparent opacity-80 group-hover:opacity-95 transition-opacity" />
+                  <span className="absolute top-3.5 left-3.5 bg-neutral-950/85 backdrop-blur-md border border-white/15 text-amber-400 text-[11px] font-bold px-3.5 py-1 rounded-full">
+                    {proje.kategori}
+                  </span>
+                  <span className="absolute bottom-3.5 right-3.5 w-9 h-9 rounded-full bg-amber-500 text-black font-bold flex items-center justify-center text-xs opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300">
+                    ⤢
+                  </span>
+                </div>
+                <div className="p-5 flex items-center justify-between gap-2">
+                  <h3 className="font-bold text-white text-base group-hover:text-amber-400 transition-colors truncate">
+                    {proje.baslik}
+                  </h3>
+                  <span className="text-neutral-500 group-hover:text-amber-400 text-sm transition shrink-0">
+                    İncele →
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-center text-neutral-500 text-sm py-10">
+            Bu kategoride henüz proje bulunmuyor.
+          </p>
+        )}
+      </section>
+
+      {/* 8. İNTERAKTİF PROJE KEŞİF SİHİRBAZI */}
       <section id="sihirbaz" className="py-24 px-6 bg-neutral-900/60 border-y border-white/10">
         <div className="max-w-5xl mx-auto">
           <Reveal className="text-center mb-12">
@@ -675,7 +1248,6 @@ export default function Home() {
 
           <Reveal>
             <div className="bg-neutral-950 border border-white/10 rounded-3xl p-6 md:p-10 shadow-2xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-              {/* Sol Seçimler */}
               <div className="lg:col-span-7 space-y-7">
                 <div>
                   <label className="block text-xs font-bold text-amber-400 uppercase tracking-wider mb-3">
@@ -718,8 +1290,8 @@ export default function Home() {
                     className="w-full accent-amber-500 cursor-pointer h-2 bg-neutral-800 rounded-lg"
                   />
                   <div className="flex justify-between text-[11px] text-neutral-500 mt-1">
-                    <span>8 m² (Küçük Balkon)</span>
-                    <span>50 m² (Teras / Bahçe)</span>
+                    <span>8 m² (Balkon)</span>
+                    <span>45 m² (Teras / Bahçe)</span>
                     <span>120 m² (Ticari Mekan)</span>
                   </div>
                 </div>
@@ -757,7 +1329,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Sağ Özet Kartı */}
               <div className="lg:col-span-5 bg-gradient-to-br from-neutral-900 to-neutral-950 border border-amber-500/30 rounded-2xl p-6 flex flex-col justify-between space-y-6">
                 <div>
                   <span className="text-[11px] font-bold uppercase tracking-widest text-amber-400">
@@ -813,149 +1384,10 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 7. TAMAMLANMIŞ PROJELER (CANLI FİRESTORE GALERİSİ) */}
-      <section id="galeri" className="py-24 px-6 max-w-7xl mx-auto">
-        <Reveal className="text-center mb-12">
-          <span className="text-amber-400 text-xs font-bold tracking-[0.25em] uppercase">
-            Referans Galerimiz
-          </span>
-          <h2 className="text-3xl md:text-5xl font-extrabold mt-2 text-white">
-            Tamamlanmış Projeler
-          </h2>
-          <p className="text-neutral-400 mt-3 max-w-xl mx-auto text-sm md:text-base">
-            Teslim ettiğimiz gerçek uygulamalarımızdan kareler. Detaylı incelemek için fotoğraflara tıklayın.
-          </p>
-        </Reveal>
-
-        {/* Kategori Filtre Butonları */}
-        {projeler.length > 0 && (
-          <div className="flex flex-wrap justify-center gap-2.5 mb-12">
-            {kategoriler.map((kat) => {
-              const adet =
-                kat === "Tümü"
-                  ? projeler.length
-                  : projeler.filter((p) => p.kategori === kat).length;
-              return (
-                <button
-                  key={kat}
-                  onClick={() => setAktifKategori(kat)}
-                  className={`px-5 py-2.5 rounded-full text-xs md:text-sm font-bold transition-all duration-300 cursor-pointer ${
-                    aktifKategori === kat
-                      ? "bg-amber-500 text-black shadow-lg shadow-amber-500/25 scale-105"
-                      : "bg-neutral-900 text-neutral-300 border border-white/10 hover:border-white/30"
-                  }`}
-                >
-                  {kat} ({adet})
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {galeriYukleniyor ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3].map((n) => (
-              <div key={n} className="bg-neutral-900 rounded-2xl h-72 animate-pulse border border-white/5" />
-            ))}
-          </div>
-        ) : filtreliProjeler.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filtreliProjeler.map((proje, idx) => (
-              <Reveal key={proje.id} delay={(idx % 3) * 90}>
-                <div
-                  onClick={() => setLightboxIndex(idx)}
-                  className="bg-neutral-900 rounded-2xl overflow-hidden border border-white/10 hover:border-amber-500/50 transition-all duration-500 cursor-pointer group shadow-lg hover:-translate-y-1.5"
-                >
-                  <div className="aspect-[16/10] bg-neutral-800 overflow-hidden relative">
-                    {proje.gorsel ? (
-                      <img
-                        src={proje.gorsel}
-                        alt={proje.baslik}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-neutral-500 text-sm">
-                        Görsel Yok
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-neutral-950/90 via-transparent to-transparent opacity-80 group-hover:opacity-95 transition-opacity" />
-                    <span className="absolute top-3.5 left-3.5 bg-neutral-950/85 backdrop-blur-md border border-white/15 text-amber-400 text-[11px] font-bold px-3.5 py-1 rounded-full">
-                      {proje.kategori}
-                    </span>
-                    <span className="absolute bottom-3.5 right-3.5 w-9 h-9 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity">
-                      ⤢
-                    </span>
-                  </div>
-                  <div className="p-5 flex items-center justify-between gap-2">
-                    <h3 className="font-bold text-white text-base group-hover:text-amber-400 transition-colors truncate">
-                      {proje.baslik}
-                    </h3>
-                    <span className="text-neutral-500 group-hover:text-amber-400 text-sm transition shrink-0">
-                      İncele →
-                    </span>
-                  </div>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        ) : (
-          <p className="text-center text-neutral-500 text-sm py-10">
-            Bu kategoride henüz proje bulunmuyor.
-          </p>
-        )}
-      </section>
-
-      {/* 8. 4 ADIMDA ÇALIŞMA SÜRECİMİZ */}
-      <section id="surec" className="py-24 px-6 bg-neutral-900/40 border-y border-white/10">
-        <div className="max-w-6xl mx-auto">
-          <Reveal className="text-center mb-16">
-            <span className="text-amber-400 text-xs font-bold tracking-[0.25em] uppercase">
-              Nasıl Çalışıyoruz?
-            </span>
-            <h2 className="text-3xl md:text-5xl font-extrabold mt-2 text-white">
-              4 Adımda Anahtar Teslim Uygulama
-            </h2>
-          </Reveal>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[
-              {
-                adim: "01",
-                baslik: "Ücretsiz Keşif & Ölçü",
-                aciklama: "Uzman ekibimiz mekanınıza gelerek lazer ölçüm yapar ve en uygun sistemi belirler.",
-              },
-              {
-                adim: "02",
-                baslik: "Projelendirme & Teklif",
-                aciklama: "Mekanınıza özel renk, cam ve otomasyon seçenekleriyle şeffaf fiyat teklifi sunulur.",
-              },
-              {
-                adim: "03",
-                baslik: "Özel Üretim",
-                aciklama: "Onayınızın ardından kendi atölyemizde milimetrik hassasiyetle üretim başlar.",
-              },
-              {
-                adim: "04",
-                baslik: "Hızlı & Temiz Montaj",
-                aciklama: "Deneyimli montaj ekibimiz sistemi kurar, test eder ve garantili olarak teslim eder.",
-              },
-            ].map((item, idx) => (
-              <Reveal key={item.adim} delay={idx * 110}>
-                <div className="bg-neutral-950 border border-white/10 rounded-2xl p-7 h-full hover:border-amber-500/40 transition">
-                  <span className="text-4xl font-black text-amber-500/30">{item.adim}</span>
-                  <h3 className="text-lg font-bold text-white mt-3 mb-2">{item.baslik}</h3>
-                  <p className="text-xs text-neutral-400 leading-relaxed">{item.aciklama}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* 9. KURUMSAL & MÜŞTERİ MEMNUNİYETİ */}
+      {/* 9. KURUMSAL & MÜŞTERİ DENEYİMLERİ */}
       <section id="kurumsal" className="py-24 px-6 max-w-7xl mx-auto space-y-24">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-          <Reveal>
+          <Reveal direction="left">
             <div className="relative rounded-3xl overflow-hidden border border-white/10 aspect-video bg-neutral-900 shadow-2xl">
               {kurumsalGorsel ? (
                 <img
@@ -975,7 +1407,7 @@ export default function Home() {
             </div>
           </Reveal>
 
-          <Reveal delay={150}>
+          <Reveal direction="right" delay={150}>
             <span className="text-amber-400 text-xs font-bold tracking-[0.25em] uppercase">
               Kurumsal
             </span>
@@ -1018,8 +1450,8 @@ export default function Home() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {MUSTERI_YORUMLARI.map((yorum, idx) => (
-              <Reveal key={yorum.ad} delay={idx * 100}>
-                <div className="bg-neutral-900 border border-white/10 rounded-2xl p-7 h-full flex flex-col justify-between">
+              <Reveal key={yorum.ad} delay={idx * 110}>
+                <div className="bg-neutral-900 border border-white/10 hover:border-amber-500/30 transition rounded-2xl p-7 h-full flex flex-col justify-between">
                   <div>
                     <div className="text-amber-400 text-sm mb-3">★★★★★</div>
                     <p className="text-neutral-300 text-sm leading-relaxed italic">
@@ -1057,7 +1489,7 @@ export default function Home() {
               return (
                 <div
                   key={item.soru}
-                  className="bg-neutral-950 border border-white/10 rounded-2xl overflow-hidden transition-colors hover:border-white/20"
+                  className="bg-neutral-950 border border-white/10 rounded-2xl overflow-hidden transition-colors hover:border-white/25"
                 >
                   <button
                     type="button"
@@ -1250,7 +1682,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* TEKNİK DETAY PENCERESİ (MODAL) */}
+      {/* TEKNİK DETAY & RENK KARTELASI PENCERESİ (MODAL) */}
       {seciliSistemModal && (
         <div
           onClick={() => setSeciliSistemModal(null)}
@@ -1291,6 +1723,26 @@ export default function Home() {
                   <p className="text-xs font-bold text-white mt-1">{td.deger}</p>
                 </div>
               ))}
+            </div>
+
+            <div>
+              <p className="text-xs font-bold text-amber-400 uppercase tracking-wider mb-2.5">
+                Profil & Cam Renk Kartelası
+              </p>
+              <div className="grid grid-cols-2 gap-2.5">
+                {seciliSistemModal.renkSecenekleri.map((renk) => (
+                  <div
+                    key={renk.ad}
+                    className="flex items-center gap-2.5 bg-neutral-950 border border-white/10 rounded-xl p-2.5"
+                  >
+                    <span
+                      className="w-5 h-5 rounded-full border border-white/25 shrink-0"
+                      style={{ backgroundColor: renk.hex }}
+                    />
+                    <span className="text-xs text-neutral-200 font-medium">{renk.ad}</span>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
